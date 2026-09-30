@@ -80,37 +80,44 @@ class MirrorViewModel(
         sessionJob?.cancel()
         val started = CompletableDeferred<Unit>().also { pendingStart = it }
         sessionJob = viewModelScope.launch {
-            val session = try {
-                startMirroring(device)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                val message = e.message ?: "연결에 실패했습니다"
-                reduce(MirrorResult.ConnectFailed(message))
-                _effects.trySend(MirrorEffect.Error(message))
-                return@launch
+            // started는 "세션을 저장했거나, 늦게 생긴 세션 정리까지 끝났거나, 실패했다"를 뜻한다.
+            // shutdown()은 이것을 기다린 뒤 _session을 보므로, 정리가 끝나기 전에 신호를 보내면 안 된다.
+            try {
+                val session = try {
+                    startMirroring(device)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    val message = e.message ?: "연결에 실패했습니다"
+                    reduce(MirrorResult.ConnectFailed(message))
+                    _effects.trySend(MirrorEffect.Error(message))
+                    return@launch
+                }
+                // 연결하는 사이에 창이 닫혔으면 바로 끝낸다(서버·forward를 남기지 않음).
+                if (shuttingDown) {
+                    withContext(NonCancellable) { stopMirroring(session) }
+                    return@launch
+                }
+                _session.value = session
+                started.complete(Unit)
+                session.events.collect { event ->
+                    when (event) {
+                        is SessionEvent.DeviceName -> reduce(MirrorResult.DeviceNameReceived(event.name))
+                        is SessionEvent.VideoSizeChanged -> reduce(MirrorResult.VideoSizeChanged(event.size))
+                        is SessionEvent.Ended -> {
+                            _session.value = null
+                            reduce(MirrorResult.SessionEnded(event.error))
+                            event.error?.let { _effects.trySend(MirrorEffect.Error(it)) }
+                            sessionJob?.cancel()
+                        }
+                    }
+                }
             } finally {
                 started.complete(Unit)
             }
-            // 연결하는 사이에 창이 닫혔으면 바로 끝낸다(서버·forward를 남기지 않음).
-            if (shuttingDown) {
-                withContext(NonCancellable) { stopMirroring(session) }
-                return@launch
-            }
-            _session.value = session
-            session.events.collect { event ->
-                when (event) {
-                    is SessionEvent.DeviceName -> reduce(MirrorResult.DeviceNameReceived(event.name))
-                    is SessionEvent.VideoSizeChanged -> reduce(MirrorResult.VideoSizeChanged(event.size))
-                    is SessionEvent.Ended -> {
-                        _session.value = null
-                        reduce(MirrorResult.SessionEnded(event.error))
-                        event.error?.let { _effects.trySend(MirrorEffect.Error(it)) }
-                        sessionJob?.cancel()
-                    }
-                }
-            }
         }
+        // 본문이 시작되기도 전에 취소돼 finally가 돌지 않는 경우에도 shutdown()이 영원히 기다리지 않게 한다.
+        sessionJob?.invokeOnCompletion { started.complete(Unit) }
     }
 
     private fun touch(intent: MirrorIntent.Touch) {
