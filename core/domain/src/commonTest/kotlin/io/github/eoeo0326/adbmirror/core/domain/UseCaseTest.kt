@@ -89,6 +89,16 @@ class UseCaseTest {
     }
 
     @Test
+    fun startRecordingRollsBackWhenKeyFrameRequestFails() = runTest {
+        val session = FakeSession().apply { failKeyFrame = "소켓이 닫혔습니다" }
+        val recordings = FakeRecordingRepository(session)
+        assertFailsWith<IllegalStateException> {
+            StartRecordingUseCase(recordings, FakeSettingsRepository())(session)
+        }
+        assertEquals(listOf("recordStart", "keyFrame", "recordStop:${session.serial}"), session.log)
+    }
+
+    @Test
     fun convertRejectsInvalidOptions() {
         val useCase = ConvertRecordingUseCase(FakeRecordingRepository(FakeSession()))
         val error = assertFailsWith<IllegalArgumentException> {

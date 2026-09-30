@@ -42,7 +42,11 @@ class FakeSession(override val serial: String = "S1") : MirrorSession {
     override val events: Flow<SessionEvent> = emptyFlow()
     override val packets: Flow<EncodedPacket> = emptyFlow()
     override suspend fun sendTouch(event: TouchEvent) { touches += event }
-    override suspend fun requestKeyFrame() { log += "keyFrame" }
+    var failKeyFrame: String? = null
+    override suspend fun requestKeyFrame() {
+        log += "keyFrame"
+        failKeyFrame?.let { error(it) }
+    }
     override suspend fun stop() { log += "stop" }
 }
 
@@ -60,7 +64,10 @@ class FakeRecordingRepository(private val session: FakeSession) : RecordingRepos
         this.session.log += "recordStart"
         startedDir = outputDir
     }
-    override suspend fun stop(serial: String): Recording? = null
+    override suspend fun stop(serial: String): Recording? {
+        session.log += "recordStop:$serial"
+        return null
+    }
     override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> =
         flowOf(ConversionProgress.Done("$file.${options.format.name.lowercase()}"))
 }

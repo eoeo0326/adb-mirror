@@ -56,10 +56,11 @@ class Recorder(private val output: RecordingOutput) {
         val p = part ?: run {
             if (packet.kind != EncodedPacket.Kind.KeyFrame) return
             output.openPart(++partCount).also {
-                it.write(m.header())
-                files += it.path
+                // 먼저 기억해 둔다. 헤더 쓰기가 실패해도 finish()가 이 part를 닫는다.
                 part = it
+                files += it.path
                 partFirstPtsUs = pts
+                it.write(m.header())
             }
         }
         m.addFrame(packet)?.let(p::write)
