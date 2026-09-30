@@ -7,31 +7,26 @@ import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 
 /**
- * 미러링 화면의 MVI 계약.
+ * 기기 하나의 미러링 창 MVI 계약. 기기 목록·선택은 `DeviceListState`가 맡는다.
  * 영상 프레임은 초당 수십 번 바뀌므로 [MirrorState]에 넣지 않고 세션의 packets Flow로 따로 흘린다.
  */
 data class MirrorState(
-    val screen: Screen = Screen.DeviceList,
-    val devices: List<Device> = emptyList(),
-    /** 사용자가 목록에서 고른 기기. 기기가 하나여도 자동으로 채우지 않는다. */
-    val selectedSerial: String? = null,
+    val device: Device,
     val connection: Connection = Connection.Idle,
     val settings: Settings = Settings(),
     val recording: RecordingState = RecordingState.Idle,
     val conversion: ConversionState = ConversionState.Idle,
     val statusMessage: String? = null,
 ) {
+    /** 처음이거나, 끊긴 뒤 다시 연결할 수 있는 상태 */
     val canConnect: Boolean
-        get() = selectedSerial != null &&
-            (connection is Connection.Idle || connection is Connection.Error)
+        get() = connection is Connection.Idle || connection is Connection.Error
 }
-
-enum class Screen { DeviceList, Mirror }
 
 sealed interface Connection {
     data object Idle : Connection
-    data class Connecting(val serial: String) : Connection
-    data class Mirroring(val serial: String, val deviceName: String? = null, val videoSize: VideoSize? = null) : Connection
+    data object Connecting : Connection
+    data class Mirroring(val deviceName: String? = null, val videoSize: VideoSize? = null) : Connection
     data class Error(val message: String) : Connection
 }
 
@@ -51,8 +46,7 @@ sealed interface ConversionState {
 
 /** 사용자 입력. */
 sealed interface MirrorIntent {
-    data object RefreshDevices : MirrorIntent
-    data class SelectDevice(val serial: String) : MirrorIntent
+    /** 연결(끊긴 뒤 다시 연결) */
     data object Connect : MirrorIntent
     data object Disconnect : MirrorIntent
     data class Touch(val action: TouchAction, val x: Int, val y: Int) : MirrorIntent
@@ -65,20 +59,12 @@ sealed interface MirrorIntent {
     data object StopRecording : MirrorIntent
     data class Convert(val file: String, val options: ConversionOptions) : MirrorIntent
     data object CancelConversion : MirrorIntent
-
-    /** Android: 무선 디버깅 페어링 */
-    data class PairDevice(val host: String, val port: Int, val code: String) : MirrorIntent
-
-    /** Web: WebUSB 기기 선택 창 열기 (사용자 제스처 안에서만 호출 가능) */
-    data object RequestUsbDevice : MirrorIntent
 }
 
 /** UseCase 실행 결과. [MirrorReducer]만 이것으로 State를 바꾼다. */
 sealed interface MirrorResult {
-    data class DevicesLoaded(val devices: List<Device>) : MirrorResult
     data class SettingsLoaded(val settings: Settings) : MirrorResult
-    data class DeviceSelected(val serial: String) : MirrorResult
-    data class ConnectStarted(val serial: String) : MirrorResult
+    data object ConnectStarted : MirrorResult
     data class ConnectFailed(val message: String) : MirrorResult
     data class DeviceNameReceived(val name: String) : MirrorResult
     data class VideoSizeChanged(val size: VideoSize) : MirrorResult
