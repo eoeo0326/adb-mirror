@@ -28,19 +28,22 @@ class SaveScreenshotUseCase(
         screenshots.save(screenshot, settings.settings.first().outputDir)
 }
 
-/** 녹화는 key frame부터 시작해야 해서, 시작 직전에 key frame을 요청한다. */
+/**
+ * 녹화는 key frame부터 시작해야 한다. 패킷을 받기 시작한 뒤에 key frame을 요청해야
+ * 요청에 응답한 config·key frame을 놓치지 않는다.
+ */
 class StartRecordingUseCase(
     private val recordings: RecordingRepository,
     private val settings: SettingsRepository,
 ) {
     suspend operator fun invoke(session: MirrorSession) {
-        session.requestKeyFrame()
         recordings.start(session, settings.settings.first().outputDir)
+        session.requestKeyFrame()
     }
 }
 
 class StopRecordingUseCase(private val recordings: RecordingRepository) {
-    suspend operator fun invoke(): Recording? = recordings.stop()
+    suspend operator fun invoke(session: MirrorSession): Recording? = recordings.stop(session.serial)
 }
 
 /** 옵션이 허용 범위를 벗어나면 변환을 시작하지 않고 [IllegalArgumentException]을 던진다. */

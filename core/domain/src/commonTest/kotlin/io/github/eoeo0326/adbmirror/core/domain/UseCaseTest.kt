@@ -80,11 +80,11 @@ class UseCaseTest {
     }
 
     @Test
-    fun startRecordingRequestsKeyFrameFirst() = runTest {
+    fun startRecordingSubscribesBeforeRequestingKeyFrame() = runTest {
         val session = FakeSession()
         val recordings = FakeRecordingRepository(session)
         StartRecordingUseCase(recordings, FakeSettingsRepository(Settings(outputDir = "/out")))(session)
-        assertEquals(listOf("keyFrame", "recordStart"), session.log)
+        assertEquals(listOf("recordStart", "keyFrame"), session.log)
         assertEquals("/out", recordings.startedDir)
     }
 

@@ -1,5 +1,5 @@
 // MP4 파일을 macOS AVFoundation(QuickTime과 같은 엔진)으로 열어 재생 가능 여부·길이·해상도를 출력하고,
-// 첫·1초·끝 지점 프레임을 디코딩한다. 두 번째 인자를 주면 1초 지점 프레임을 PNG로 저장한다.
+// 첫·1초(짧으면 가운데)·끝 지점 프레임을 디코딩한다. 두 번째 인자를 주면 1초 지점 프레임을 PNG로 저장한다.
 //   swift scripts/check_mp4.swift core/data/build/fixture-mp4/session1.mp4 [frame.png]
 import AVFoundation
 import AppKit
@@ -17,10 +17,12 @@ Task {
         print("playable=\(playable) duration=\(String(format: "%.3f", duration.seconds))s size=\(size) nominalFps=\(frames)")
         let gen = AVAssetImageGenerator(asset: asset)
         gen.requestedTimeToleranceBefore = .zero; gen.requestedTimeToleranceAfter = .zero
-        for t in [0.0, 1.0, duration.seconds - 0.05] {
+        // 1초보다 짧은 파일(회전 직후 part 등)은 가운데 지점을 본다.
+        let mid = min(1.0, duration.seconds / 2)
+        for t in [0.0, mid, max(0, duration.seconds - 0.05)] {
             let (img, actual) = try await gen.image(at: CMTime(seconds: t, preferredTimescale: 600))
             print("frame@\(String(format: "%.2f", t)) -> actual \(String(format: "%.3f", actual.seconds)) \(img.width)x\(img.height)")
-            if t == 1.0, CommandLine.arguments.count > 2 {
+            if t == mid, CommandLine.arguments.count > 2 {
                 let rep = NSBitmapImageRep(cgImage: img)
                 try rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: CommandLine.arguments[2]))
             }

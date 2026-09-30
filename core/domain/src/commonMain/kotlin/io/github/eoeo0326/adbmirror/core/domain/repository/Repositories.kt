@@ -30,11 +30,13 @@ interface ScreenshotRepository {
     suspend fun save(screenshot: Screenshot, outputDir: String?): String
 }
 
+/** 기기(serial)마다 녹화 하나. */
 interface RecordingRepository {
+    /** 패킷 구독이 시작된 뒤에 반환한다. 그 뒤에 요청한 key frame은 놓치지 않는다. 이미 녹화 중이면 오류. */
     suspend fun start(session: MirrorSession, outputDir: String?)
 
-    /** 녹화 중이 아니면 null. */
-    suspend fun stop(): Recording?
+    /** 남은 조각까지 쓰고 파일을 닫는다. 그 기기가 녹화 중이 아니면 null. */
+    suspend fun stop(serial: String): Recording?
     fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress>
 }
 

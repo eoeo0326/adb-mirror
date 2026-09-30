@@ -13,6 +13,8 @@ class EncodedPacket(
     /** 프레임 PTS(µs). config 패킷은 PTS가 없어 null. */
     val ptsUs: Long?,
     val data: ByteArray,
+    /** config 패킷에만: 이 config가 속한 캡처 세션의 영상 크기. 회전하면 새 크기와 함께 config가 다시 온다. */
+    val videoSize: VideoSize? = null,
 ) {
     enum class Kind { Config, KeyFrame, Frame }
 }
