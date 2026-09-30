@@ -1,4 +1,5 @@
 [versions]
+kadb = "1.2.1"
 kotlin = "2.4.20"
 compose-multiplatform = "1.12.1"
 agp = "9.4.1"
@@ -14,6 +15,7 @@ bytedeco-ffmpeg = "7.1.1-1.5.12"
 bytedeco-javacpp = "1.5.12"
 
 [libraries]
+kadb = { module = "com.flyfishxu:kadb", version.ref = "kadb" }
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }

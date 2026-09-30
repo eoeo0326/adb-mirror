@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 무선 디버깅 기기에 TCP로 붙는다(페어링·ADB 연결) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
+        android:name="io.github.eoeo0326.adbmirror.AdbMirrorApplication"
         android:label="ADB Mirror"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity

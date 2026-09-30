@@ -1,5 +1,7 @@
 package io.github.eoeo0326.adbmirror.core.data.mirror
 
+import io.github.eoeo0326.adbmirror.core.adb.SocketNotReadyException
+
 import io.github.eoeo0326.adbmirror.core.adb.AdbDevice
 import io.github.eoeo0326.adbmirror.core.adb.AdbTransport
 import io.github.eoeo0326.adbmirror.core.adb.ByteArraySource
@@ -44,6 +46,8 @@ class FakeAdbTransport(private val streams: ArrayDeque<FakeStream> = ArrayDeque(
     var shellReply: (List<String>) -> String = { "" }
     /** n번째(0부터) openLocalAbstract 호출을 실패시킨다. */
     var failOpenAt: Int? = null
+    /** 처음 n번의 openLocalAbstract는 소켓이 아직 없다고 거절한다(Kadb 직접 연결처럼). */
+    var refuseOpens = 0
 
     override suspend fun devices() = deviceUpdates.replayCache.lastOrNull() ?: emptyList()
     override fun trackDevices(): Flow<List<AdbDevice>> = deviceUpdates
@@ -57,6 +61,7 @@ class FakeAdbTransport(private val streams: ArrayDeque<FakeStream> = ArrayDeque(
     }
     override suspend fun openLocalAbstract(serial: String, name: String): DeviceStream {
         if (failOpenAt == opened.size) { opened += name; error("forward 실패") }
+        if (refuseOpens > 0) { refuseOpens--; opened += name; throw SocketNotReadyException(name) }
         opened += name
         return streams.removeFirst().stream
     }

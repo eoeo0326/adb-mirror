@@ -44,6 +44,19 @@ class ScrcpyServerLauncherTest {
     }
 
     @Test
+    fun retriesWhenTransportRefusesBeforeServerListens() = runTest {
+        val video = FakeStream.of(byteArrayOf(0))
+        val transport = FakeAdbTransport(ArrayDeque(listOf(video))).apply { refuseOpens = 2 }
+        val launcher = ScrcpyServerLauncher(transport, { jar }, Random(1), retryDelayMs = 1)
+
+        val connection = launcher.launch("S1", MirrorOptions(maxSize = 1280, maxFps = 60, control = false))
+
+        assertEquals(video.stream, connection.video)
+        assertEquals(3, transport.opened.size, "거절 두 번 뒤 세 번째에 연결")
+        assertTrue(!transport.process.stopped)
+    }
+
+    @Test
     fun noControlSocketWhenControlDisabled() = runTest {
         val transport = FakeAdbTransport(ArrayDeque(listOf(FakeStream.of(byteArrayOf(0)))))
         val connection = ScrcpyServerLauncher(transport, { jar }).launch("S1", MirrorOptions(720, 30, control = false))

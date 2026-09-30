@@ -21,5 +21,13 @@ kotlin { jvmToolchain(21) }
 
 dependencies {
     implementation(projects.composeApp)
+    implementation(projects.feature.mirror)
+    implementation(projects.core.data)
+    implementation(projects.core.adb)
+    implementation(projects.core.domain)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.runtime)
+    implementation(libs.compose.ui)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
 }
