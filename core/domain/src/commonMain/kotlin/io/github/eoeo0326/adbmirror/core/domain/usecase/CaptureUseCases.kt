@@ -8,8 +8,10 @@ import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.repository.RecordingRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.ScreenshotRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 
 class CaptureScreenshotUseCase(private val screenshots: ScreenshotRepository) {
     suspend operator fun invoke(serial: String): Screenshot = screenshots.capture(serial)
@@ -38,7 +40,13 @@ class StartRecordingUseCase(
 ) {
     suspend operator fun invoke(session: MirrorSession) {
         recordings.start(session, settings.settings.first().outputDir)
-        session.requestKeyFrame()
+        try {
+            session.requestKeyFrame()
+        } catch (e: Throwable) {
+            // 요청이 실패(또는 취소)하면 이미 시작한 녹화를 되돌려, 같은 기기의 다음 녹화를 막지 않게 한다.
+            withContext(NonCancellable) { recordings.stop(session.serial) }
+            throw e
+        }
     }
 }
 

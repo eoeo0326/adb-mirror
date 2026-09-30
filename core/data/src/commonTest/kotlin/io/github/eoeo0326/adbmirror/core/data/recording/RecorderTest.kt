@@ -18,10 +18,13 @@ class RecorderTest {
     private fun key(pts: Long) = EncodedPacket(EncodedPacket.Kind.KeyFrame, pts, b(0, 0, 0, 1, 0x65, 1, 2, 3))
     private fun frame(pts: Long) = EncodedPacket(EncodedPacket.Kind.Frame, pts, b(0, 0, 0, 1, 0x41, 9))
 
-    private class MemPart(override val path: String) : RecordingPart {
+    private class MemPart(override val path: String, val failWrites: Boolean = false) : RecordingPart {
         var bytes = ByteArray(0)
         var closed = false
-        override fun write(bytes: ByteArray) { this.bytes += bytes }
+        override fun write(bytes: ByteArray) {
+            if (failWrites) error("디스크가 가득 찼습니다")
+            this.bytes += bytes
+        }
         override fun close() { closed = true }
     }
 
@@ -92,5 +95,15 @@ class RecorderTest {
         recorder.accept(config(null))
         recorder.accept(key(0))
         assertEquals(Recorder.Result(emptyList(), 0), recorder.finish())
+    }
+
+    @Test
+    fun partIsClosedEvenIfHeaderWriteFails() {
+        val failing = mutableListOf<MemPart>()
+        val r = Recorder { i -> MemPart("p$i", failWrites = true).also { failing += it } }
+        r.accept(config(portrait))
+        kotlin.test.assertFails { r.accept(key(0)) }
+        r.finish()
+        assertTrue(failing.single().closed)
     }
 }
