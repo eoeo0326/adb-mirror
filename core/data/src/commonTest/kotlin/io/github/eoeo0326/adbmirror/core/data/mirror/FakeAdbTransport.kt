@@ -42,6 +42,8 @@ class FakeAdbTransport(private val streams: ArrayDeque<FakeStream> = ArrayDeque(
     val process = FakeProcess()
     val deviceUpdates = MutableSharedFlow<List<AdbDevice>>(replay = 1)
     var shellReply: (List<String>) -> String = { "" }
+    /** n번째(0부터) openLocalAbstract 호출을 실패시킨다. */
+    var failOpenAt: Int? = null
 
     override suspend fun devices() = deviceUpdates.replayCache.lastOrNull() ?: emptyList()
     override fun trackDevices(): Flow<List<AdbDevice>> = deviceUpdates
@@ -53,6 +55,7 @@ class FakeAdbTransport(private val streams: ArrayDeque<FakeStream> = ArrayDeque(
         return process
     }
     override suspend fun openLocalAbstract(serial: String, name: String): DeviceStream {
+        if (failOpenAt == opened.size) { opened += name; error("forward 실패") }
         opened += name
         return streams.removeFirst().stream
     }
