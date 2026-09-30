@@ -29,6 +29,19 @@ struct Adb {
     /// 명령을 실행하고 끝날 때까지 기다린다. 실패하면 stderr를 담아 throw.
     @discardableResult
     func run(_ args: [String]) throws -> String {
+        String(decoding: try runData(args), as: UTF8.self)
+    }
+
+    /// 원본 해상도 PNG 스크린샷. 미러링 스트림과 별개로 기기에서 직접 캡처한다.
+    func screenshot(serial: String) throws -> Data {
+        let png = try runData(["-s", serial, "exec-out", "screencap", "-p"])
+        guard png.starts(with: [0x89, 0x50, 0x4E, 0x47]) else {
+            throw AdbError(description: "screencap 결과가 PNG가 아닙니다.")
+        }
+        return png
+    }
+
+    func runData(_ args: [String]) throws -> Data {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = args
@@ -41,12 +54,11 @@ struct Adb {
         let errData = err.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
 
-        let stdout = String(decoding: outData, as: UTF8.self)
         guard process.terminationStatus == 0 else {
-            let stderr = String(decoding: errData, as: UTF8.self)
-            throw AdbError(description: "adb \(args.joined(separator: " ")) 실패: \(stderr.isEmpty ? stdout : stderr)")
+            let stderr = String(decoding: errData.isEmpty ? outData : errData, as: UTF8.self)
+            throw AdbError(description: "adb \(args.joined(separator: " ")) 실패: \(stderr)")
         }
-        return stdout
+        return outData
     }
 
     /// `device` 상태인 기기의 serial 목록.

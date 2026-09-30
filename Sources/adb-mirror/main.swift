@@ -6,6 +6,7 @@ struct Options {
     var maxFps = 60
     var stats = false
     var viewOnly = false
+    var screenshotDir = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
 
     static func parse(_ args: [String]) -> Options {
         var opts = Options()
@@ -22,14 +23,20 @@ struct Options {
                 opts.stats = true
             case "--view-only":
                 opts.viewOnly = true
+            case "--screenshot-dir":
+                guard let dir = it.next() else { fail("--screenshot-dir 에 경로가 필요합니다.") }
+                opts.screenshotDir = URL(fileURLWithPath: (dir as NSString).expandingTildeInPath, isDirectory: true)
             case "-h", "--help":
                 print("""
-                사용법: adb-mirror [-s SERIAL] [--max-size PX] [--fps N] [--view-only]
-                  -s, --serial   대상 기기 (기본: 연결된 첫 기기)
-                  --max-size     긴 변 최대 픽셀 (기본 1280, 0이면 원본)
-                  --fps          최대 프레임레이트 (기본 60)
-                  --view-only    터치 입력을 보내지 않음
-                  --stats        1초마다 수신 fps·표시 상태 출력
+                사용법: adb-mirror [-s SERIAL] [--max-size PX] [--fps N] [--view-only] [--screenshot-dir DIR]
+                  -s, --serial       대상 기기 (기본: 연결된 첫 기기)
+                  --max-size         긴 변 최대 픽셀 (기본 1280, 0이면 원본)
+                  --fps              최대 프레임레이트 (기본 60)
+                  --view-only        터치 입력을 보내지 않음
+                  --screenshot-dir   ⌘S 스크린샷 저장 폴더 (기본 ~/Desktop)
+                  --stats            1초마다 수신 fps·표시 상태 출력
+
+                단축키: ⌘C 스크린샷 클립보드 복사, ⌘S 스크린샷 파일 저장, ⌘Q 종료
                 """)
                 exit(0)
             default:
@@ -47,6 +54,8 @@ func fail(_ message: String) -> Never {
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let options: Options
+    private var adb: Adb?
+    private var serial = ""
     private var server: ScrcpyServer?
     private var control: ControlChannel?
     private var reader: StreamReader?
@@ -74,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 }
                 serial = first
             }
+
+            self.adb = adb
+            self.serial = serial
+            setUpMenu()
 
             let window = MirrorWindow(title: serial)
             window.delegate = self
@@ -145,6 +158,87 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             self.control?.sendTouch(action, x: x, y: y,
                                     screenWidth: Int(size.width), screenHeight: Int(size.height))
         }
+    }
+
+    // MARK: - 스크린샷
+
+    private func setUpMenu() {
+        let main = NSMenu()
+
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "adb-mirror 종료", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let shotItem = NSMenuItem()
+        let shotMenu = NSMenu(title: "스크린샷")
+        shotMenu.addItem(withTitle: "클립보드에 복사", action: #selector(copyScreenshot), keyEquivalent: "c").target = self
+        shotMenu.addItem(withTitle: "파일로 저장", action: #selector(saveScreenshot), keyEquivalent: "s").target = self
+        shotItem.submenu = shotMenu
+        main.addItem(shotItem)
+
+        NSApp.mainMenu = main
+    }
+
+    @objc private func copyScreenshot() {
+        captureScreenshot { png in
+            let pb = NSPasteboard.general
+            pb.clearContents()
+            pb.setData(png, forType: .png)
+            return "스크린샷을 클립보드에 복사했습니다"
+        }
+    }
+
+    @objc private func saveScreenshot() {
+        let dir = options.screenshotDir
+        let serial = serial
+        captureScreenshot { png in
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss"
+            let url = dir.appendingPathComponent("\(serial)_\(formatter.string(from: Date())).png")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            try png.write(to: url)
+            return "저장: \(url.path)"
+        }
+    }
+
+    /// screencap은 1초 안팎 걸리므로 백그라운드에서 받고, 결과 처리는 메인에서 한다.
+    private func captureScreenshot(_ handle: @escaping (Data) throws -> String) {
+        guard let adb else { return }
+        let serial = serial
+        showStatus("스크린샷 캡처 중…")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result = Result { try adb.screenshot(serial: serial) }
+            DispatchQueue.main.async {
+                do {
+                    let message = try handle(try result.get())
+                    print(message)
+                    self?.showStatus(message)
+                } catch {
+                    FileHandle.standardError.write("adb-mirror: 스크린샷 실패: \(error)\n".data(using: .utf8)!)
+                    self?.showStatus("스크린샷 실패")
+                }
+            }
+        }
+    }
+
+    private var statusClear: DispatchWorkItem?
+
+    /// 창 제목 아래(subtitle)에 잠깐 상태를 표시한다.
+    private func showStatus(_ text: String) {
+        window?.subtitle = text
+        statusClear?.cancel()
+        let clear = DispatchWorkItem { [weak self] in self?.window?.subtitle = "" }
+        statusClear = clear
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: clear)
+    }
+
+    // MARK: - 종료
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        shutdown()
+        return .terminateNow
     }
 
     private var framesInSecond = 0
