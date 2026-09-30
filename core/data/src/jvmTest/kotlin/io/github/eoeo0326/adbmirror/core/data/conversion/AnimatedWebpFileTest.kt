@@ -2,11 +2,13 @@ package io.github.eoeo0326.adbmirror.core.data.conversion
 
 import java.io.File
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertContentEquals
+import kotlin.test.assertEquals
 
 /**
- * 단색 VP8L 프레임 3장으로 애니메이션 WebP를 만들어 build/fixture-webp/에 남긴다.
- * 파일이 실제로 열리는지는 macOS ImageIO로 확인한다: `swift scripts/check_animated_image.swift <file>`
+ * 단색 VP8L 프레임 3장으로 애니메이션 WebP를 만들고, 결과를 다시 파싱해 컨테이너 구조를 검증한다.
+ * JVM에는 WebP 디코더가 없어 픽셀 디코딩은 하지 않는다. 생성 파일(build/fixture-webp/)은
+ * macOS ImageIO로 직접 열어 볼 수 있다: `swift scripts/check_animated_image.swift <file>`
  */
 class AnimatedWebpFileTest {
     /**
@@ -35,15 +37,57 @@ class AnimatedWebpFileTest {
             "VP8L".encodeToByteArray() + le32(payload.size) + payload + ByteArray(pad)
     }
 
+    private class Chunk(val fourcc: String, val start: Int, val payload: ByteArray)
+
+    private fun le32(b: ByteArray, at: Int) = (0 until 4).sumOf { (b[at + it].toInt() and 0xFF) shl (8 * it) }
+    private fun le24(b: ByteArray, at: Int) = (0 until 3).sumOf { (b[at + it].toInt() and 0xFF) shl (8 * it) }
+
+    /** [from, to) 구간의 RIFF 청크를 순서대로 읽는다. 패딩까지 정확히 떨어지지 않으면 실패한다. */
+    private fun chunks(b: ByteArray, from: Int, to: Int): List<Chunk> {
+        val list = mutableListOf<Chunk>()
+        var p = from
+        while (p < to) {
+            val size = le32(b, p + 4)
+            list += Chunk(b.copyOfRange(p, p + 4).decodeToString(), p, b.copyOfRange(p + 8, p + 8 + size))
+            p += 8 + size + (size and 1)
+        }
+        assertEquals(to, p, "청크가 구간 끝에 정확히 맞지 않는다")
+        return list
+    }
+
     @Test
-    fun writesAnimatedWebp() {
+    fun animatedWebpStructureRoundTrips() {
         val colors = listOf(0xFFE5484D.toInt(), 0xFF2FB38A.toInt(), 0xFF17212B.toInt())
+        val stills = colors.map { solidVp8l(64, 48, it) }
+        val durations = listOf(200, 120, 350)
         val muxer = AnimatedWebpMuxer(64, 48, loopCount = 0)
-        colors.forEach { muxer.addFrame(solidVp8l(64, 48, it), durationMs = 200) }
+        stills.forEachIndexed { i, still -> muxer.addFrame(still, durationMs = durations[i]) }
         val webp = muxer.finish()
+
+        assertEquals("RIFF", webp.copyOfRange(0, 4).decodeToString())
+        assertEquals(webp.size - 8, le32(webp, 4))
+        val top = chunks(webp, 12, webp.size)
+        assertEquals(listOf("VP8X", "ANIM", "ANMF", "ANMF", "ANMF"), top.map { it.fourcc })
+        val vp8x = top[0].payload
+        assertEquals(0x02, vp8x[0].toInt()) // animation, 알파 없음
+        assertEquals(63, le24(vp8x, 4))
+        assertEquals(47, le24(vp8x, 7))
+
+        top.drop(2).forEachIndexed { i, anmf ->
+            val f = anmf.payload
+            assertEquals(0, le24(f, 0)); assertEquals(0, le24(f, 3)) // 위치
+            assertEquals(63, le24(f, 6)); assertEquals(47, le24(f, 9)) // 크기
+            assertEquals(durations[i], le24(f, 12))
+            assertEquals(0x02, f[15].toInt())
+            // ANMF 안 이미지 청크가 원본 한 장짜리 WebP의 VP8L 청크와 바이트 단위로 같아야 한다.
+            val inner = chunks(f, 16, f.size).single()
+            assertEquals("VP8L", inner.fourcc)
+            val original = chunks(stills[i], 12, stills[i].size).single()
+            assertContentEquals(original.payload, inner.payload)
+        }
+
         File("build/fixture-webp").mkdirs()
         File("build/fixture-webp/solid-3frames.webp").writeBytes(webp)
-        File("build/fixture-webp/solid-still.webp").writeBytes(solidVp8l(64, 48, colors[0]))
-        assertTrue(webp.size > 100)
+        File("build/fixture-webp/solid-still.webp").writeBytes(stills[0])
     }
 }
