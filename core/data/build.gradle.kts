@@ -16,12 +16,18 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(projects.core.domain)
-            implementation(projects.core.adb)
+            api(projects.core.domain)
+            api(projects.core.adb)
             implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
+}
+
+// jvmTest의 fixture 테스트가 레포 루트의 fixtures/를 읽는다.
+tasks.withType<Test>().configureEach {
+    systemProperty("fixtures.dir", rootProject.layout.projectDirectory.dir("fixtures").asFile.absolutePath)
 }
