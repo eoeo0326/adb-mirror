@@ -41,9 +41,11 @@ swift build -c release
 .build/release/adb-mirror
 ```
 
-## KMP 앱 (개발 중)
+## KMP 앱 (Desktop 사용 가능 · Android·Web 준비 중)
 
-Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop에서 기기 선택 → 미러링 → 터치, 클릭 이펙트, 스크린샷, 설정 저장까지 됩니다(Android·Web은 준비 중). JDK 21과 Android SDK(compileSdk 37)가 필요하고, scrcpy-server는 빌드할 때 Gradle이 받아 옵니다.
+Kotlin Multiplatform + Compose Multiplatform 버전입니다. Desktop에서 기기 선택 → 미러링 → 터치, 클릭 이펙트, 스크린샷, MP4 녹화, GIF·WebP 변환, 설정 저장까지 됩니다. macOS·Windows·Linux 설치 파일과 포터블은 [Releases](https://github.com/eoeo0326/adb-mirror/releases)에서 받을 수 있습니다.
+
+직접 빌드하려면 JDK 21과 Android SDK(compileSdk 37)가 필요하고, scrcpy-server는 빌드할 때 Gradle이 받아 옵니다.
 
 ```bash
 ./gradlew :composeApp:run                         # Desktop
