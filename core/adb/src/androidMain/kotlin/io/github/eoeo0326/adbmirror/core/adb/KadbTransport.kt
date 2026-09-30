@@ -41,16 +41,22 @@ class KadbTransport(keyStore: KadbKeyStore) : WirelessAdbTransport {
         val serial = "$host:$port"
         // 같은 기기를 동시에 연결해도 Kadb 연결은 하나만 열고, 연 연결은 반드시 등록하거나 닫는다.
         return connections.getOrOpen(serial) {
-            withContext(Dispatchers.IO) {
-                val kadb = Kadb.create(host, port, connectTimeout = CONNECT_TIMEOUT_MS, socketTimeout = 0)
-                val model = try {
-                    kadb.shell("getprop ro.product.model").output.trim()
+            // Kadb의 socketTimeout은 연결 내내 걸려서, 걸어 두면 화면이 멈춘 동안(영상 없음) 연결이 끊긴다.
+            // 그래서 먼저 제한 시간을 둔 확인용 연결로 인증·첫 명령까지 해 보고, 되면 제한 없는 연결을 연다.
+            // (핸드셰이크 중 소켓은 Kadb 안에만 있어 밖에서 닫아 깨울 수 없다.)
+            val model = withContext(Dispatchers.IO) {
+                val probe = Kadb.create(host, port, connectTimeout = CONNECT_TIMEOUT_MS, socketTimeout = PROBE_READ_TIMEOUT_MS)
+                try {
+                    probe.shell("getprop ro.product.model").output.trim()
                 } catch (e: Exception) {
-                    runCatching { kadb.close() }
-                    throw AdbException("연결하지 못했습니다. 무선 디버깅이 켜져 있고 이 앱과 페어링했는지 확인하세요 (${e.message ?: e::class.simpleName})")
+                    val reason = if (e is java.net.SocketTimeoutException) "${PROBE_READ_TIMEOUT_MS / 1000}초 동안 응답이 없습니다" else e.message ?: e::class.simpleName
+                    throw AdbException("연결하지 못했습니다. 무선 디버깅이 켜져 있고 이 앱과 페어링했는지 확인하세요 ($reason)")
+                } finally {
+                    runCatching { probe.close() }
                 }
-                kadb to AdbDevice(serial, "device", model.ifBlank { null })
             }
+            val kadb = Kadb.create(host, port, connectTimeout = CONNECT_TIMEOUT_MS, socketTimeout = 0)
+            kadb to AdbDevice(serial, "device", model.ifBlank { null })
         }
     }
 
@@ -154,6 +160,8 @@ class KadbTransport(keyStore: KadbKeyStore) : WirelessAdbTransport {
 
     private companion object {
         const val CONNECT_TIMEOUT_MS = 5_000
+        /** 확인용 연결의 읽기 제한 시간. Kadb는 실패하면 5번까지 다시 시도하므로 최악 약 25초. */
+        const val PROBE_READ_TIMEOUT_MS = 5_000
         const val FILE_MODE = 420 // 0644
     }
 }

@@ -23,8 +23,8 @@ class ConnectionRegistry<C : Any>(private val close: suspend (C) -> Unit) {
     operator fun get(serial: String): C? = _entries.value[serial]?.connection
 
     /**
-     * 이미 연결돼 있으면 그 기기를, 아니면 [open]으로 연결해 등록한다. 연결을 여는 동안에는 취소하지 않는다
-     * (연결 시간은 [open] 쪽 제한 시간으로 끊는다). [open]이 실패하면 아무것도 등록하지 않는다.
+     * 이미 연결돼 있으면 그 기기를, 아니면 [open]으로 연결해 등록한다. 연결을 여는 동안에는 취소하지 않으므로
+     * [open]은 반드시 끝나야 한다(TCP 연결부터 첫 응답까지 제한 시간을 스스로 건다). 실패하면 아무것도 등록하지 않는다.
      */
     suspend fun getOrOpen(serial: String, open: suspend () -> Pair<C, AdbDevice>): AdbDevice =
         withContext(NonCancellable) {
