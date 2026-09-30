@@ -6,7 +6,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ ! -f Sources/adb-mirror/Resources/scrcpy-server ]; then
-    ./scripts/fetch-server.sh
+    ../scripts/fetch-server.sh
 fi
 
 # 증분 빌드라 변경이 없으면 1초 안에 끝난다.

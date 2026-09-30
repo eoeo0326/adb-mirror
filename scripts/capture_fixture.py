@@ -23,10 +23,10 @@ import sys
 import threading
 import time
 
-SERVER_VERSION = "4.1"  # Sources/adb-mirror/ScrcpyServer.swift 의 serverVersion 과 같아야 한다
+SERVER_VERSION = "4.1"  # macos-swift/Sources/adb-mirror/ScrcpyServer.swift 의 serverVersion 과 같아야 한다
 DEVICE_PATH = "/data/local/tmp/scrcpy-server.jar"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SERVER_JAR = os.path.join(ROOT, "Sources/adb-mirror/Resources/scrcpy-server")
+SERVER_JAR = os.path.join(ROOT, "macos-swift/Sources/adb-mirror/Resources/scrcpy-server")
 
 FLAG_SESSION = 1 << 63
 FLAG_CONFIG = 1 << 62

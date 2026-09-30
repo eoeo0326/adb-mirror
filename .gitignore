@@ -1,5 +1,13 @@
 .build/
 .swiftpm/
 .DS_Store
-Sources/adb-mirror/Resources/scrcpy-server
+macos-swift/Sources/adb-mirror/Resources/scrcpy-server
 __pycache__/
+
+# Gradle / Kotlin
+.gradle/
+build/
+.kotlin/
+local.properties
+.idea/
+*.iml
