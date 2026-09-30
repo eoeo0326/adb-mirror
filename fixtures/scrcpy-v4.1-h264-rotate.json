@@ -1,0 +1,31 @@
+{
+  "deviceNameLength": 8,
+  "codecId": "0x68323634",
+  "sessions": [
+    {
+      "width": 340,
+      "height": 720,
+      "frameIndex": 0
+    },
+    {
+      "width": 720,
+      "height": 340,
+      "frameIndex": 70
+    },
+    {
+      "width": 340,
+      "height": 720,
+      "frameIndex": 103
+    }
+  ],
+  "configPackets": 3,
+  "framePackets": 125,
+  "keyFrames": 3,
+  "payloadBytes": 1219396,
+  "firstPtsUs": 2107403839018,
+  "lastPtsUs": 2107412301318,
+  "trailingBytes": 0,
+  "serverVersion": "4.1",
+  "maxSize": 720,
+  "bytes": 1221036
+}
