@@ -54,7 +54,20 @@ Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop�
 ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 수 출력
 ```
 
-### 설정 파일 위치
+### 설치 파일 만들기
+
+설치 파일은 그 OS에서만 만들 수 있습니다(크로스 빌드 안 됨). macOS는 빌드하는 Mac의 아키텍처(arm64·x64)용으로 만들어집니다.
+
+| OS | 명령 | 결과 (`composeApp/build/compose/binaries/main/`) |
+|---|---|---|
+| macOS | `./gradlew :composeApp:packageDmg` | `dmg/ADB Mirror-<버전>.dmg` |
+| Windows | `./gradlew :composeApp:packageMsi` | `msi/ADB Mirror-<버전>.msi` (사용자 단위 설치, 관리자 권한 불필요) |
+| Linux | `./gradlew :composeApp:packageDeb` · `packageRpm` | `deb/`, `rpm/` (`adb-mirror`) |
+
+- 버전은 `gradle.properties`의 `appVersion`(MAJOR.MINOR.PATCH)입니다. macOS 패키지는 첫 숫자가 0이면 만들 수 없어서, 1.0 전까지는 macOS 패키지 버전만 첫 숫자를 1로 씁니다(0.3.0 → 1.3.0).
+- 아직 Apple 개발자 서명·공증을 하지 않았습니다. 받은 dmg의 앱이 열리지 않으면 Finder에서 우클릭 → 열기를 누르세요.
+
+
 
 설정(해상도·fps·토글·저장 폴더·adb 경로)은 `settings.properties`에 저장됩니다.
 
