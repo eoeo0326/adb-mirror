@@ -29,6 +29,9 @@ class SurfaceDecodeController(private val session: MirrorSession) : AutoCloseabl
     /** 초당 그린 프레임을 로그로(`adb logcat -s adb-mirror`). 측정할 때만 켠다. */
     var logFps: Boolean = false
 
+    /** 영상을 더 그릴 수 없을 때(디코더를 계속 만들지 못함) 사용자에게 보일 문구. 디코딩 스레드에서 불린다. */
+    var onFatal: (String) -> Unit = {}
+
     fun attach(surface: Surface) {
         detach()
         job = scope.launch {
@@ -36,6 +39,7 @@ class SurfaceDecodeController(private val session: MirrorSession) : AutoCloseabl
                 newDecoder = { size -> MediaCodecH264Decoder(surface, size) },
                 requestKeyFrame = { launch { session.requestKeyFrame() } },
                 nowMs = { System.nanoTime() / 1_000_000 },
+                onError = { Log.w("adb-mirror", "디코더 오류, key frame을 다시 받아 이어 갑니다: ${it.message}") },
             )
             var frames = 0
             var windowStart = System.nanoTime()
@@ -55,8 +59,9 @@ class SurfaceDecodeController(private val session: MirrorSession) : AutoCloseabl
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Surface가 먼저 사라지는 등 코덱 오류: 이 Surface에서는 더 그리지 않는다(다시 붙으면 새로 시작).
-                Log.w("adb-mirror", "영상 디코딩을 멈췄습니다: ${e.message}")
+                // 디코더 오류는 루프가 복구한다. 여기까지 오면 디코더를 계속 만들지 못한 것이다.
+                Log.e("adb-mirror", "영상 디코딩을 멈췄습니다: ${e.message}")
+                onFatal(e.message ?: "영상을 표시할 수 없습니다")
             } finally {
                 loop.close()
             }

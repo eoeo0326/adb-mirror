@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -34,7 +39,13 @@ actual fun VideoSurface(
     modifier: Modifier,
 ) {
     // `adb shell setprop log.tag.adb-mirror DEBUG`이면 초당 디코딩 프레임을 로그로 남긴다.
-    val controller = remember(session) { SurfaceDecodeController(session).apply { logFps = Log.isLoggable("adb-mirror", Log.DEBUG) } }
+    var fatal by remember(session) { mutableStateOf<String?>(null) }
+    val controller = remember(session) {
+        SurfaceDecodeController(session).apply {
+            logFps = Log.isLoggable("adb-mirror", Log.DEBUG)
+            onFatal = { fatal = it }
+        }
+    }
     DisposableEffect(controller) { onDispose { controller.close() } }
     val touch by rememberUpdatedState(onTouch)
 
@@ -56,6 +67,7 @@ actual fun VideoSurface(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+            fatal?.let { Text(it, color = Color.White, modifier = Modifier.align(Alignment.Center).padding(16.dp)) }
             Box(
                 Modifier.matchParentSize().pointerInput(videoSize) {
                     val video = videoSize ?: return@pointerInput
