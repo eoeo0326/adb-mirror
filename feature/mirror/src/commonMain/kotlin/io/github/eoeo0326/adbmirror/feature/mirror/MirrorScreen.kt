@@ -54,7 +54,7 @@ fun MirrorRoute(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
             // 녹화를 저장하면 바로 변환할 수 있게 한다.
             val action = if (effect is MirrorEffect.RecordingSaved) "변환…" else null
             if (snackbar.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
-                (effect as? MirrorEffect.RecordingSaved)?.let { viewModel.onIntent(MirrorIntent.OpenConversion(it.files.first())) }
+                (effect as? MirrorEffect.RecordingSaved)?.let { viewModel.onIntent(MirrorIntent.OpenConversion(it.files)) }
             }
         }
     }
@@ -134,7 +134,7 @@ private fun OptionsMenu(state: MirrorState, onIntent: (MirrorIntent) -> Unit) {
             DropdownMenuItem(
                 text = { Text("최근 녹화 변환…", style = MaterialTheme.typography.bodyMedium) },
                 enabled = state.lastRecording.isNotEmpty(),
-                onClick = { open = false; onIntent(MirrorIntent.OpenConversion(state.lastRecording.first())) },
+                onClick = { open = false; onIntent(MirrorIntent.OpenConversion(state.lastRecording)) },
             )
             HorizontalDivider()
             MenuToggle("보기 전용", state.settings.viewOnly) { onIntent(MirrorIntent.ToggleViewOnly) }

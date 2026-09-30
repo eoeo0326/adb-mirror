@@ -47,9 +47,9 @@ sealed interface RecordingState {
     data object Stopping : RecordingState
 }
 
-/** 변환 화면에서 고르는 중인 내용. */
+/** 변환 화면에서 고르는 중인 내용. [files]가 여럿이면 회전으로 나뉜 part를 이어서 변환한다. */
 data class ConversionDraft(
-    val file: String,
+    val files: List<String>,
     val info: VideoInfo,
     val options: ConversionOptions,
     val formats: Set<AnimatedFormat>,
@@ -79,8 +79,8 @@ sealed interface MirrorIntent {
     data object SaveScreenshot : MirrorIntent
     data object StartRecording : MirrorIntent
     data object StopRecording : MirrorIntent
-    /** 녹화 파일로 변환 화면을 연다. */
-    data class OpenConversion(val file: String) : MirrorIntent
+    /** 녹화 파일로 변환 화면을 연다. 회전으로 나뉜 녹화면 part를 모두 넘겨 이어서 변환한다. */
+    data class OpenConversion(val files: List<String>) : MirrorIntent
     data class ChangeConversionOptions(val options: ConversionOptions) : MirrorIntent
     /** 변환 화면의 옵션으로 변환한다. */
     data object Convert : MirrorIntent

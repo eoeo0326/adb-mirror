@@ -9,7 +9,18 @@ data class Recording(val serial: String, val files: List<String>, val durationMs
 enum class AnimatedFormat { Gif, WebP }
 
 /** 녹화 파일 정보. 변환 화면의 구간·너비 기본값과 예상 크기에 쓴다. */
-data class VideoInfo(val durationMs: Long, val width: Int, val height: Int)
+data class VideoInfo(val durationMs: Long, val width: Int, val height: Int) {
+    companion object {
+        /**
+         * 회전으로 나뉜 part들을 이어 붙인 정보. 길이는 합이고, 크기는 첫 part(캔버스) 기준이다.
+         * 다른 방향 part는 이 캔버스 안에 비율을 지켜 맞춘다.
+         */
+        fun joined(parts: List<VideoInfo>): VideoInfo {
+            require(parts.isNotEmpty())
+            return VideoInfo(parts.sumOf { it.durationMs }, parts.first().width, parts.first().height)
+        }
+    }
+}
 
 data class ConversionOptions(
     val format: AnimatedFormat = AnimatedFormat.Gif,

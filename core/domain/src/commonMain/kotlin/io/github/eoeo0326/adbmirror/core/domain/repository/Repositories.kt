@@ -45,8 +45,11 @@ interface RecordingRepository {
     /** 이 플랫폼에서 만들 수 있는 형식(예: WebP 인코더가 없으면 GIF만). */
     fun supportedFormats(): Set<AnimatedFormat>
 
-    /** 원본 옆에 같은 이름의 .gif/.webp로 쓴다. 흐름을 취소하면 쓰던 파일을 지운다. */
-    fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress>
+    /**
+     * [files]를 차례로 이어(회전으로 나뉜 part) 하나의 애니메이션으로 만든다. 캔버스는 첫 part 크기이고,
+     * 결과는 첫 파일 옆에 같은 이름의 .gif/.webp로 쓴다. 흐름을 취소하면 쓰던 파일을 지운다.
+     */
+    fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress>
 }
 
 interface SettingsRepository {

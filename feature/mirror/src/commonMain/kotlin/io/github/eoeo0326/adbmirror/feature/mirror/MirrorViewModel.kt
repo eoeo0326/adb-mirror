@@ -112,7 +112,7 @@ class MirrorViewModel(
             MirrorIntent.StartRecording -> beginRecording()
             MirrorIntent.StopRecording -> endRecording()
             MirrorIntent.ToggleShowTouches -> viewModelScope.launch { updateSettings { it.copy(showTouches = !it.showTouches) } }
-            is MirrorIntent.OpenConversion -> openConversion(intent.file)
+            is MirrorIntent.OpenConversion -> openConversion(intent.files)
             is MirrorIntent.ChangeConversionOptions -> reduce(MirrorResult.ConversionOptionsChanged(intent.options))
             MirrorIntent.Convert -> convert()
             MirrorIntent.CancelConversion -> cancelConversion()
@@ -240,14 +240,14 @@ class MirrorViewModel(
         )
     }
 
-    private fun openConversion(file: String) {
-        if (_state.value.conversion is ConversionState.Converting) return
+    private fun openConversion(files: List<String>) {
+        if (files.isEmpty() || _state.value.conversion is ConversionState.Converting) return
         viewModelScope.launch {
             try {
-                val info = getVideoInfo(file)
+                val info = getVideoInfo(files)
                 val formats = getConversionFormats()
                 val options = ConversionOptions(width = minOf(ConversionOptions().width, info.width))
-                reduce(MirrorResult.ConversionOpened(ConversionDraft(file, info, options, formats)))
+                reduce(MirrorResult.ConversionOpened(ConversionDraft(files, info, options, formats)))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -262,7 +262,7 @@ class MirrorViewModel(
         reduce(MirrorResult.ConversionProgressed(0f))
         conversionJob = viewModelScope.launch {
             try {
-                convertRecording(draft.file, draft.options).collect { progress ->
+                convertRecording(draft.files, draft.options).collect { progress ->
                     when (progress) {
                         is ConversionProgress.Running -> reduce(MirrorResult.ConversionProgressed(progress.fraction))
                         is ConversionProgress.Done -> {
