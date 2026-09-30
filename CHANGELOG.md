@@ -22,6 +22,7 @@
 - GIF·WebP 변환: 녹화 저장 알림의 "변환…"·창 메뉴 "최근 녹화 변환…"·파일 > 녹화 파일 변환…에서 구간·fps·너비·반복·품질(WebP)·디더링(GIF)을 골라 변환, 진행률·취소, 예상 크기와 20MB 초과 경고. Desktop은 FFmpeg로 디코딩하고 WebP는 FFmpeg 내장 libwebp로 인코딩
 - 설치 파일 설정: macOS dmg(번들 ID·아이콘·개발자 도구 분류), Windows msi(사용자 단위 설치·시작 메뉴·고정 upgradeUuid), Linux deb·rpm(`adb-mirror`, Development 메뉴). 1.0 전 macOS 패키지 버전은 첫 숫자를 1로 씀
 - 포터블 배포본(Windows zip·Linux tar.gz, `portable` 표식 포함)과 `packageDistributions` 작업: 설치 파일·포터블을 `build/release/`에 `ADB-Mirror-<버전>-<os>-<arch>` 이름으로 모음
+- GitHub Actions: 테스트, macOS arm64·x64 / Windows x64 / Linux x64·arm64 패키지 빌드와 포터블 구조 확인, `v*` 태그 시 Release 업로드와 SHA256SUMS. macOS 서명·공증은 Secrets가 있을 때만
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30
