@@ -55,7 +55,8 @@ compose.desktop {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "ADB Mirror"
             packageVersion = appVersion
-            description = "adb로 연결한 Android 기기 화면 미러링·스크린샷·녹화"
+            // WiX 3(MSI)는 기본 코드 페이지 1252라 한글을 넣으면 빌드가 실패한다. 설치 파일 메타데이터는 영어로 둔다.
+            description = "Mirror, screenshot and record Android device screens over adb"
             vendor = "eoeo0326"
             copyright = "Copyright 2026 eoeo0326. Apache License 2.0."
             // licenseFile은 두지 않는다. 넣으면 dmg를 열 때마다 동의 창이 뜬다(Apache-2.0은 동의가 필요 없음).
@@ -154,6 +155,11 @@ afterEvaluate {
             else -> listOf("packageDeb", "packageRpm")
         }
         dependsOn(packageTasks)
+        // 공증(-Pcompose.desktop.mac.notarization.appleID)할 때는 스테이플까지 끝난 dmg를 모은다.
+        // 공증이 dmg를 제자리에서 고치므로, 같은 호출 안에서 그 뒤에 복사해야 한다.
+        if (distOs == "macos" && providers.gradleProperty("compose.desktop.mac.notarization.appleID").isPresent) {
+            dependsOn("notarizeDmg")
+        }
         into(distDir)
         packageTasks.forEach { name ->
             val ext = name.removePrefix("package").lowercase()

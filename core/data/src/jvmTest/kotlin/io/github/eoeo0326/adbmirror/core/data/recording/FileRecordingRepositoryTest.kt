@@ -12,7 +12,9 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.nio.file.Files
 import java.time.LocalDateTime
@@ -45,6 +47,11 @@ class FileRecordingRepositoryTest {
 
     @AfterTest fun tearDown() = scope.cancel()
 
+    /** 보낸 패킷을 녹화기가 다 처리할 때까지 기다린다. 바로 stop하면 마지막 패킷이 처리 전에 취소될 수 있다. */
+    private suspend fun awaitAccepted(serial: String, count: Int) = withTimeout(5_000) {
+        while (repo.acceptedCount(serial) < count) delay(5)
+    }
+
     @Test
     fun recordsFromPacketsSentRightAfterStart() = runBlocking {
         val session = Session("192.168.0.5:5555")
@@ -55,6 +62,7 @@ class FileRecordingRepositoryTest {
         session.flow.emit(key(0))
         session.flow.emit(frame(500_000))
         session.flow.emit(frame(1_000_000))
+        awaitAccepted(session.serial, 4)
         val recording = repo.stop(session.serial)!!
         assertEquals(listOf(File(dir, "adb-mirror_192.168.0.5_5555_20260930_090807.mp4").absolutePath), recording.files)
         assertEquals(1000, recording.durationMs)
@@ -69,6 +77,7 @@ class FileRecordingRepositoryTest {
         session.flow.emit(key(0))
         session.flow.emit(EncodedPacket(EncodedPacket.Kind.Config, null, config.data, VideoSize(720, 340)))
         session.flow.emit(key(100_000))
+        awaitAccepted("A", 4)
         val names = repo.stop("A")!!.files.map { File(it).name }
         assertEquals(listOf("adb-mirror_A_20260930_090807.mp4", "adb-mirror_A_20260930_090807_part2.mp4"), names)
     }
@@ -91,6 +100,7 @@ class FileRecordingRepositoryTest {
         repo.start(session, home.path)
         session.flow.emit(config)
         session.flow.emit(key(0))
+        awaitAccepted("A", 2)
         assertEquals("adb-mirror_A_20260930_090807_2.mp4", File(repo.stop("A")!!.files.single()).name)
         assertEquals("old", File(home, "adb-mirror_A_20260930_090807.mp4").readText())
     }

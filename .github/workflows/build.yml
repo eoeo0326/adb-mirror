@@ -94,7 +94,9 @@ jobs:
         run: |
           args=()
           if [ -n "$KEYCHAIN" ]; then
+            # Compose의 notarizeDmg는 구성 캐시에 저장되지 않아 서명할 때만 끈다.
             args+=(
+              --no-configuration-cache
               -Pcompose.desktop.mac.sign=true
               "-Pcompose.desktop.mac.signing.identity=$MAC_IDENTITY"
               "-Pcompose.desktop.mac.signing.keychain=$KEYCHAIN"
@@ -103,24 +105,34 @@ jobs:
               "-Pcompose.desktop.mac.notarization.teamID=$APPLE_TEAM_ID"
             )
           fi
-          # 공증(스테이플)이 dmg를 고치므로 먼저 하고, 그 뒤에 build/release/로 모은다.
-          if [ -n "$KEYCHAIN" ]; then
-            ./gradlew :composeApp:notarizeDmg "${args[@]}"
-          fi
+          # 공증 속성이 있으면 packageDistributions가 notarizeDmg(스테이플) 뒤에 dmg를 모은다.
           ./gradlew :composeApp:packageDistributions "${args[@]}"
           ls -la composeApp/build/release
+
+      - name: 공증 스테이플 확인
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        run: |
+          for f in composeApp/build/release/*.dmg; do xcrun stapler validate "$f"; done
 
       - name: 포터블 구조 확인
         if: runner.os != 'macOS'
         run: |
           for f in composeApp/build/release/*-portable.*; do scripts/check-portable.sh "$f"; done
 
+      # 인증서가 있으면 엄격히 검증하고, 없으면 서명 상태만 남긴다(x64는 서명 없음, arm64는 링커의 ad-hoc 서명).
       - name: macOS 앱 서명 확인
         if: runner.os == 'macOS'
         run: |
           app="$(find composeApp/build/compose/binaries/main/app -maxdepth 1 -name '*.app' | head -1)"
-          codesign --verify --deep --strict --verbose=2 "$app"
-          codesign -dv "$app" 2>&1 | grep -E 'Signature|Authority|TeamIdentifier' || true
+          if [ "$HAS_MAC_CERT" = true ]; then
+            codesign --verify --deep --strict --verbose=2 "$app"
+          fi
+          codesign -dv "$app" 2>&1 | grep -E 'Signature|Authority|TeamIdentifier|not signed' || true
+
+      - name: jpackage 로그(실패 시)
+        if: failure()
+        run: |
+          find composeApp/build/compose/logs -name '*.txt' -print -exec cat {} \; 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
