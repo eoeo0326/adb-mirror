@@ -4,6 +4,7 @@ struct Options {
     var serial: String?
     var maxSize = 1280
     var maxFps = 60
+    var stats = false
 
     static func parse(_ args: [String]) -> Options {
         var opts = Options()
@@ -16,12 +17,15 @@ struct Options {
                 opts.maxSize = it.next().flatMap(Int.init) ?? opts.maxSize
             case "--fps", "--max-fps":
                 opts.maxFps = it.next().flatMap(Int.init) ?? opts.maxFps
+            case "--stats":
+                opts.stats = true
             case "-h", "--help":
                 print("""
                 사용법: adb-mirror [-s SERIAL] [--max-size PX] [--fps N]
                   -s, --serial   대상 기기 (기본: 연결된 첫 기기)
                   --max-size     긴 변 최대 픽셀 (기본 1280, 0이면 원본)
                   --fps          최대 프레임레이트 (기본 60)
+                  --stats        1초마다 수신 fps·표시 상태 출력
                 """)
                 exit(0)
             default:
@@ -97,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func startReading(port: UInt16) {
         let reader = StreamReader(port: port)
         self.reader = reader
+        if options.stats { startStats() }
         Thread.detachNewThread { [weak self] in
             let decoder = H264Decoder()
             do {
@@ -113,13 +118,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                         decoder.updateConfig(data)
                     case .frame(let data, _):
                         if let sample = decoder.sampleBuffer(for: data) {
-                            DispatchQueue.main.async { self?.window?.enqueue(sample) }
+                            DispatchQueue.main.async {
+                                self?.window?.enqueue(sample)
+                                self?.framesInSecond += 1
+                            }
                         }
                     }
                 }
             } catch {
                 DispatchQueue.main.async { self?.shutdown(error: error) }
             }
+        }
+    }
+
+    private var framesInSecond = 0
+    private var statsTimer: Timer?
+
+    private func startStats() {
+        statsTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self, let layer = self.window?.displayLayer else { return }
+            let status = layer.status == .failed ? "failed: \(layer.error?.localizedDescription ?? "?")" : "ok"
+            print("fps=\(self.framesInSecond) layer=\(status)")
+            self.framesInSecond = 0
         }
     }
 
