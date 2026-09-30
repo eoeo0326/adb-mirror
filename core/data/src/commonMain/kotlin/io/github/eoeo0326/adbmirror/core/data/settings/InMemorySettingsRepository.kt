@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 
-/** 앱을 끄면 사라지는 설정. 파일 저장소(#12)가 생기기 전까지 쓴다. */
+/** 앱을 끄면 사라지는 설정. 파일 저장소가 없는 플랫폼과 테스트에서 쓴다. */
 class InMemorySettingsRepository(initial: Settings = Settings()) : SettingsRepository {
     private val state = MutableStateFlow(initial)
     override val settings: StateFlow<Settings> = state
