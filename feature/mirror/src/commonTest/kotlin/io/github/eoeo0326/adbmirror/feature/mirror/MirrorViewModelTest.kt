@@ -50,9 +50,11 @@ class MirrorViewModelTest {
         override val packets: Flow<EncodedPacket> = emptyFlow()
         val touches = mutableListOf<TouchEvent>()
         var stopped = false
+        /** 설정하면 stop이 이 값이 완료될 때까지 멈춘다(서버 정리에 시간이 걸리는 상황). */
+        var stopGate: CompletableDeferred<Unit>? = null
         override suspend fun sendTouch(event: TouchEvent) { touches += event }
         override suspend fun requestKeyFrame() {}
-        override suspend fun stop() { stopped = true; eventFlow.emit(SessionEvent.Ended(null)) }
+        override suspend fun stop() { stopGate?.await(); stopped = true; eventFlow.emit(SessionEvent.Ended(null)) }
     }
 
     private val device = Device("A", DeviceState.Online, "SM N976N")
@@ -144,18 +146,32 @@ class MirrorViewModelTest {
     }
 
     @Test
-    fun shutdownWhileConnectingStopsSessionOnceStarted() = runTest {
-        val gate = CompletableDeferred<Unit>().also { startGate = it }
+    fun shutdownWhileConnectingWaitsUntilLateSessionIsFullyStopped() = runTest {
+        val startGate = CompletableDeferred<Unit>().also { this@MirrorViewModelTest.startGate = it }
+        val stopGate = CompletableDeferred<Unit>().also { session.stopGate = it }
         val vm = viewModel()
         assertEquals(Connection.Connecting, vm.state.value.connection)
+
         val shutdown = launch { vm.shutdown() }
-        testScheduler.runCurrent()
+        testScheduler.advanceUntilIdle()
         assertFalse(shutdown.isCompleted, "연결 시도가 끝날 때까지 기다려야 한다")
-        gate.complete(Unit) // 창을 닫은 뒤에야 서버가 떴다
+
+        startGate.complete(Unit) // 창을 닫은 뒤에야 서버가 떴다
+        testScheduler.advanceUntilIdle()
+        assertFalse(shutdown.isCompleted, "늦게 생긴 세션의 정리가 끝나기 전에 반환하면 안 된다")
+
+        stopGate.complete(Unit)
         shutdown.join()
-        assertTrue(session.stopped, "늦게 생긴 세션도 정리해야 한다")
+        assertTrue(session.stopped)
         assertNull(vm.session.value)
         vm.shutdown() // 두 번 불러도 안전
+    }
+
+    @Test
+    fun shutdownAfterConnectedStopsSession() = runTest {
+        val vm = viewModel()
+        vm.shutdown()
+        assertTrue(session.stopped)
     }
 
     @Test
