@@ -7,7 +7,9 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
+import io.github.eoeo0326.adbmirror.feature.mirror.Connection
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
+import io.github.eoeo0326.adbmirror.feature.mirror.RecordingState
 
 internal val isMac: Boolean = System.getProperty("os.name").orEmpty().lowercase().startsWith("mac")
 
@@ -27,6 +29,12 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
         Menu("파일") {
             Item("스크린샷 복사", shortcut = shortcut(Key.C), enabled = !state.capturingScreenshot) { send(MirrorIntent.CopyScreenshot) }
             Item("스크린샷 저장", shortcut = shortcut(Key.S), enabled = !state.capturingScreenshot) { send(MirrorIntent.SaveScreenshot) }
+            val rec = state.recording
+            if (rec is RecordingState.Idle) {
+                Item("녹화 시작", shortcut = shortcut(Key.R), enabled = state.connection is Connection.Mirroring) { send(MirrorIntent.StartRecording) }
+            } else {
+                Item("녹화 정지", shortcut = shortcut(Key.R), enabled = rec is RecordingState.Recording) { send(MirrorIntent.StopRecording) }
+            }
             Separator()
             Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)
             if (!isMac) {

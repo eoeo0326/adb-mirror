@@ -18,6 +18,7 @@
 - 설정 저장(`settings.properties`)과 설정 창(macOS ⌘, · Windows·Linux 파일 > 설정…): 해상도·fps·보기 토글·저장 폴더·adb 경로
   - 설치형은 OS 표준 위치, 실행 파일 옆에 `portable` 파일이 있으면 `data/`(포터블)
   - adb를 못 찾으면 첫 창에서 adb 위치를 지정할 수 있음
+- MP4 녹화(⌘R / Ctrl+R): 다시 인코딩하지 않고 fragmented MP4로 기록, 시작 시 key frame 즉시 요청, 회전하면 `_part2`, `_part3`…으로 나눔. 녹화 중 경과 시간 표시, 연결이 끊기거나 창을 닫아도 그때까지 저장
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30

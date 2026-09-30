@@ -5,6 +5,9 @@ import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
+import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
+import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
+import io.github.eoeo0326.adbmirror.core.domain.model.Recording
 import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
@@ -13,6 +16,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 import io.github.eoeo0326.adbmirror.core.domain.repository.DeviceRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.MirrorRepository
+import io.github.eoeo0326.adbmirror.core.domain.repository.RecordingRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.ScreenshotRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
@@ -22,7 +26,9 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.StartRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.StopRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +68,8 @@ class MirrorViewModelTest {
         /** 설정하면 stop이 이 값이 완료될 때까지 멈춘다(서버 정리에 시간이 걸리는 상황). */
         var stopGate: CompletableDeferred<Unit>? = null
         override suspend fun sendTouch(event: TouchEvent) { touches += event }
-        override suspend fun requestKeyFrame() {}
+        var keyFrameRequests = 0
+        override suspend fun requestKeyFrame() { keyFrameRequests++ }
         override suspend fun stop() { stopGate?.await(); stopped = true; eventFlow.emit(SessionEvent.Ended(null)) }
     }
 
@@ -121,6 +128,22 @@ class MirrorViewModelTest {
         }
     }
 
+    /** serial → 녹화 중 여부. 파일은 녹화 1건당 하나로 흉내 낸다. */
+    private val recordingActive = mutableSetOf<String>()
+    private var recordStartGate: CompletableDeferred<Unit>? = null
+    private var failRecordStart: String? = null
+    private var recordedFiles = listOf("/out/a.mp4")
+    private val recordingRepo = object : RecordingRepository {
+        override suspend fun start(session: MirrorSession, outputDir: String?) {
+            recordStartGate?.await()
+            failRecordStart?.let { error(it) }
+            check(recordingActive.add(session.serial)) { "이미 녹화 중" }
+        }
+        override suspend fun stop(serial: String): Recording? =
+            if (recordingActive.remove(serial)) Recording(serial, recordedFiles, 1000) else null
+        override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> = emptyFlow()
+    }
+
     private fun viewModel() = MirrorViewModel(
         device = device,
         getSettings = GetSettingsUseCase(settingsRepo),
@@ -132,6 +155,8 @@ class MirrorViewModelTest {
         captureScreenshot = CaptureScreenshotUseCase(screenshotRepo),
         copyScreenshot = CopyScreenshotUseCase(screenshotRepo),
         saveScreenshot = SaveScreenshotUseCase(screenshotRepo, settingsRepo),
+        startRecording = StartRecordingUseCase(recordingRepo, settingsRepo),
+        stopRecording = StopRecordingUseCase(recordingRepo),
     )
 
     @BeforeTest fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -368,5 +393,91 @@ class MirrorViewModelTest {
         assertEquals("스크린샷을 저장했습니다: /a.png", MirrorEffect.ScreenshotSaved("/a.png").message())
         assertEquals("x", MirrorEffect.Error("x").message())
         assertNull(MirrorEffect.AskShowTouchesForRecording.message())
+    }
+
+    private suspend fun mirroringViewModel(): MirrorViewModel = viewModel().also {
+        session.eventFlow.emit(SessionEvent.VideoSizeChanged(VideoSize(340, 720)))
+    }
+
+    @Test
+    fun recordingStartsAfterSubscribingAndStopsWithSavedFiles() = runTest {
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        assertIs<RecordingState.Recording>(vm.state.value.recording)
+        assertTrue("A" in recordingActive)
+        assertEquals(1, session.keyFrameRequests)
+
+        vm.onIntent(MirrorIntent.StopRecording)
+        assertEquals(RecordingState.Idle, vm.state.value.recording)
+        assertEquals(MirrorEffect.RecordingSaved(listOf("/out/a.mp4")), vm.effects.first())
+        assertTrue(recordingActive.isEmpty())
+    }
+
+    @Test
+    fun recordingNeedsMirroring() = runTest {
+        val vm = viewModel() // 아직 영상 크기 전(연결 중)
+        vm.onIntent(MirrorIntent.StartRecording)
+        assertEquals(RecordingState.Idle, vm.state.value.recording)
+        assertTrue(recordingActive.isEmpty())
+    }
+
+    @Test
+    fun sessionEndWhileRecordingSavesRecording() = runTest {
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        session.eventFlow.emit(SessionEvent.Ended("영상 스트림이 끊겼습니다"))
+        assertTrue(recordingActive.isEmpty())
+        assertEquals(RecordingState.Idle, vm.state.value.recording)
+        assertEquals(MirrorEffect.RecordingSaved(listOf("/out/a.mp4")), vm.effects.first())
+    }
+
+    @Test
+    fun sessionEndWhileRecordingIsStartingLeavesNoOrphanRecording() = runTest {
+        val gate = CompletableDeferred<Unit>().also { recordStartGate = it }
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        assertEquals(RecordingState.Starting, vm.state.value.recording)
+
+        val ended = launch { session.eventFlow.emit(SessionEvent.Ended(null)) }
+        testScheduler.advanceUntilIdle()
+        gate.complete(Unit) // 세션이 끝난 뒤에야 녹화가 시작됨
+        testScheduler.advanceUntilIdle()
+        ended.join()
+        assertTrue(recordingActive.isEmpty(), "시작이 끝난 뒤 정지돼야 한다")
+        assertEquals(RecordingState.Idle, vm.state.value.recording)
+    }
+
+    @Test
+    fun shutdownFinishesRecordingBeforeReturning() = runTest {
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        vm.shutdown()
+        assertTrue(recordingActive.isEmpty())
+        assertTrue(session.stopped)
+    }
+
+    @Test
+    fun recordingStartFailureShowsErrorAndReturnsToIdle() = runTest {
+        failRecordStart = "디스크가 가득 찼습니다"
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        assertEquals(RecordingState.Idle, vm.state.value.recording)
+        assertEquals(MirrorEffect.Error("녹화를 시작하지 못했습니다: 디스크가 가득 찼습니다"), vm.effects.first())
+    }
+
+    @Test
+    fun emptyRecordingIsReportedAsMessage() = runTest {
+        recordedFiles = emptyList()
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        vm.onIntent(MirrorIntent.StopRecording)
+        assertEquals(MirrorEffect.ShowMessage("녹화된 화면이 없어 파일을 만들지 않았습니다"), vm.effects.first())
+    }
+
+    @Test
+    fun elapsedFormat() {
+        assertEquals("0:00", formatElapsed(999))
+        assertEquals("1:05", formatElapsed(65_000))
+        assertEquals("1:00:01", formatElapsed(3_601_000))
     }
 }
