@@ -8,6 +8,7 @@
 - Swift 프로토타입을 `macos-swift/`로 이동 (실행: `cd macos-swift && ./run.sh`)
 
 ### 추가
+- domain 레이어: 모델(기기·영상·터치·스크린샷·녹화·변환 옵션·설정), Repository 인터페이스 5종, UseCase 13종과 단위 테스트
 - KMP/CMP Gradle 멀티모듈 뼈대: `core/domain` · `core/adb` · `core/data` · `feature/mirror` · `composeApp`(Desktop · Web) · `androidApp`
 
 ## [0.2.0] - 2026-09-30
