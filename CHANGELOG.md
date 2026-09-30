@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-30
+
+Phase 1(공통 코드) 완료 릴리즈입니다. 사용자가 쓰는 앱은 아직 `macos-swift/`의 Swift 프로토타입이며, KMP 앱은 공통 로직만 갖춘 상태입니다.
+
 ### 변경
 - Swift 프로토타입을 `macos-swift/`로 이동 (실행: `cd macos-swift && ./run.sh`)
 
@@ -36,6 +40,7 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/eoeo0326/adb-mirror/releases/tag/v0.1.0
