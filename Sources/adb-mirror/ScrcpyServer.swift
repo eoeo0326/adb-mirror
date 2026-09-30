@@ -21,7 +21,7 @@ final class ScrcpyServer {
         self.serial = serial
     }
 
-    func start(maxSize: Int, maxFps: Int) throws {
+    func start(maxSize: Int, maxFps: Int, control: Bool) throws {
         guard let jar = Bundle.module.path(forResource: "scrcpy-server", ofType: nil) else {
             throw AdbError(description: "번들에 scrcpy-server가 없습니다. scripts/fetch-server.sh 를 먼저 실행하세요.")
         }
@@ -41,7 +41,9 @@ final class ScrcpyServer {
             "tunnel_forward=true",
             "video=true",
             "audio=false",
-            "control=false",
+            "control=\(control)",
+            // 기기 클립보드 변경 알림을 받지 않는다 (컨트롤 소켓으로 들어오는 메시지 최소화).
+            "clipboard_autosync=false",
             "video_codec=h264",
             "max_size=\(maxSize)",
             "max_fps=\(maxFps)",

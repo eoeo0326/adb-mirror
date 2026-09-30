@@ -2,6 +2,8 @@ import Foundation
 
 /// scrcpy 영상 소켓에서 읽어 올린 이벤트.
 enum StreamEvent {
+    /// 컨트롤 소켓 연결 완료 (control=true 일 때만).
+    case controlReady(ControlChannel)
     case deviceName(String)
     /// 캡처 세션 시작(최초 연결·회전 시). 영상 크기가 바뀐다.
     case session(width: Int, height: Int)
@@ -18,15 +20,26 @@ final class StreamReader {
     private static let flagKeyFrame: UInt64 = 1 << 61
 
     private let port: UInt16
+    private let withControl: Bool
     private var fd: Int32 = -1
+    private var controlFd: Int32 = -1
 
-    init(port: UInt16) {
+    init(port: UInt16, withControl: Bool) {
         self.port = port
+        self.withControl = withControl
     }
 
     /// 연결부터 스트림 종료까지 블로킹. 이벤트는 호출 스레드에서 전달된다.
     func run(onEvent: (StreamEvent) -> Void) throws {
         try connectWithRetry()
+        // 서버는 video → control 순서로 accept한 뒤에야 device meta를 보낸다.
+        if withControl {
+            guard let s = openSocket() else {
+                throw AdbError(description: "컨트롤 소켓 연결에 실패했습니다.")
+            }
+            controlFd = s
+            onEvent(.controlReady(ControlChannel(fd: s)))
+        }
 
         let nameBytes = try read(64)
         let name = String(decoding: nameBytes.prefix(while: { $0 != 0 }), as: UTF8.self)
@@ -57,11 +70,12 @@ final class StreamReader {
     }
 
     func close() {
-        if fd >= 0 {
-            shutdown(fd, SHUT_RDWR)
-            Darwin.close(fd)
-            fd = -1
+        for s in [fd, controlFd] where s >= 0 {
+            shutdown(s, SHUT_RDWR)
+            Darwin.close(s)
         }
+        fd = -1
+        controlFd = -1
     }
 
     /// forward 터널은 기기 쪽이 아직 listen 전이어도 connect가 성공하므로,

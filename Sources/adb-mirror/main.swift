@@ -5,6 +5,7 @@ struct Options {
     var maxSize = 1280
     var maxFps = 60
     var stats = false
+    var viewOnly = false
 
     static func parse(_ args: [String]) -> Options {
         var opts = Options()
@@ -19,12 +20,15 @@ struct Options {
                 opts.maxFps = it.next().flatMap(Int.init) ?? opts.maxFps
             case "--stats":
                 opts.stats = true
+            case "--view-only":
+                opts.viewOnly = true
             case "-h", "--help":
                 print("""
-                사용법: adb-mirror [-s SERIAL] [--max-size PX] [--fps N]
+                사용법: adb-mirror [-s SERIAL] [--max-size PX] [--fps N] [--view-only]
                   -s, --serial   대상 기기 (기본: 연결된 첫 기기)
                   --max-size     긴 변 최대 픽셀 (기본 1280, 0이면 원본)
                   --fps          최대 프레임레이트 (기본 60)
+                  --view-only    터치 입력을 보내지 않음
                   --stats        1초마다 수신 fps·표시 상태 출력
                 """)
                 exit(0)
@@ -44,6 +48,7 @@ func fail(_ message: String) -> Never {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private let options: Options
     private var server: ScrcpyServer?
+    private var control: ControlChannel?
     private var reader: StreamReader?
     private var window: MirrorWindow?
     private var sigint: DispatchSourceSignal?
@@ -83,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     self?.shutdown()
                 }
             }
-            try server.start(maxSize: options.maxSize, maxFps: options.maxFps)
+            try server.start(maxSize: options.maxSize, maxFps: options.maxFps, control: !options.viewOnly)
             self.server = server
             startReading(port: server.localPort)
         } catch {
@@ -99,7 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func startReading(port: UInt16) {
-        let reader = StreamReader(port: port)
+        let reader = StreamReader(port: port, withControl: !options.viewOnly)
         self.reader = reader
         if options.stats { startStats() }
         Thread.detachNewThread { [weak self] in
@@ -107,6 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             do {
                 try reader.run { event in
                     switch event {
+                    case .controlReady(let channel):
+                        DispatchQueue.main.async { self?.attachControl(channel) }
                     case .deviceName(let name):
                         DispatchQueue.main.async { self?.window?.title = name }
                     case .session(let width, let height):
@@ -128,6 +135,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             } catch {
                 DispatchQueue.main.async { self?.shutdown(error: error) }
             }
+        }
+    }
+
+    private func attachControl(_ channel: ControlChannel) {
+        control = channel
+        window?.mirrorView.onTouch = { [weak self] action, x, y in
+            guard let self, let size = self.window?.mirrorView.videoSize else { return }
+            self.control?.sendTouch(action, x: x, y: y,
+                                    screenWidth: Int(size.width), screenHeight: Int(size.height))
         }
     }
 
