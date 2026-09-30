@@ -6,7 +6,7 @@ adb로 연결한 Android 기기 화면을 데스크톱 창에 띄우고, 마우�
 
 기기 쪽 인코더로 [scrcpy](https://github.com/Genymobile/scrcpy)의 `scrcpy-server`만 사용합니다. 받은 H.264 영상은 macOS의 VideoToolbox로 직접 디코딩해 표시하므로 scrcpy나 FFmpeg를 따로 설치할 필요가 없습니다.
 
-> 현재 버전은 macOS용 Swift 프로토타입입니다. Kotlin Multiplatform + Compose Multiplatform으로 옮겨 macOS·Windows·Linux·Android·Web(Chromium)에서 쓰도록 확장할 계획입니다. 자세한 내용은 [로드맵](docs/ROADMAP.md)을 참고하세요.
+> 지금 쓸 수 있는 앱은 `macos-swift/`의 macOS용 Swift 프로토타입입니다. Kotlin Multiplatform + Compose Multiplatform으로 옮겨 macOS·Windows·Linux·Android·Web(Chromium)에서 쓰도록 확장할 계획입니다. 자세한 내용은 [로드맵](docs/ROADMAP.md)을 참고하세요.
 
 ## 기능
 
@@ -21,7 +21,7 @@ adb로 연결한 Android 기기 화면을 데스크톱 창에 띄우고, 마우�
 - adb: `PATH`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, `~/Library/Android/sdk` 순서로 찾습니다.
 - Android 5.0 이상 기기에서 USB 디버깅이 켜져 있어야 합니다.
 
-## 실행
+## 실행 (macOS Swift 프로토타입)
 
 ```bash
 git clone https://github.com/eoeo0326/adb-mirror.git
@@ -39,6 +39,31 @@ cd adb-mirror/macos-swift
 cd macos-swift
 swift build -c release
 .build/release/adb-mirror
+```
+
+## KMP 앱 (개발 중)
+
+Kotlin Multiplatform + Compose Multiplatform 버전은 아직 뼈대 단계입니다. JDK 21과 Android SDK(compileSdk 37)가 필요합니다.
+
+```bash
+./gradlew :composeApp:run                         # Desktop
+./gradlew :androidApp:installDebug                # Android
+./gradlew :composeApp:wasmJsBrowserDevelopmentRun # Web
+./gradlew allTests                                # 공통 테스트
+```
+
+## 구조
+
+```
+core/domain      모델 · Repository 인터페이스 · UseCase (순수 Kotlin)
+core/adb         AdbTransport 인터페이스와 플랫폼별 구현
+core/data        scrcpy 프로토콜 · Repository 구현
+feature/mirror   MVI 화면 (Compose)
+composeApp       공유 앱 + Desktop · Web 진입점
+androidApp       Android 앱 진입점
+macos-swift/     Swift 프로토타입 (KMP 버전이 같은 기능을 갖출 때까지 유지)
+scripts/         scrcpy-server 다운로드, fixture 캡처
+fixtures/        파서 테스트용 실제 스트림
 ```
 
 ## 옵션
