@@ -1,9 +1,14 @@
 package io.github.eoeo0326.adbmirror.core.adb
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
@@ -20,26 +25,32 @@ class AdbBinaryTransport(private val adb: File) : AdbTransport {
 
     override suspend fun devices(): List<AdbDevice> = AdbOutputParser.parseDevices(text(run(listOf("devices", "-l"))))
 
+    /** 전체 목록 스냅샷이라 소비가 늦으면 최신 목록만 남긴다(conflate). */
     override fun trackDevices(): Flow<List<AdbDevice>> = callbackFlow {
         val process = ProcessBuilder(adb.path, "track-devices", "-l").redirectErrorStream(true).start()
-        val reader = thread(name = "adb-track-devices", isDaemon = true) {
-            val buffer = StringBuilder()
-            val chunk = CharArray(4096)
-            process.inputStream.reader().use { input ->
-                while (true) {
-                    val n = input.read(chunk)
-                    if (n < 0) break
-                    buffer.append(chunk, 0, n)
-                    AdbOutputParser.takeTrackMessages(buffer).forEach { trySend(AdbOutputParser.parseDevices(it)) }
+        thread(name = "adb-track-devices", isDaemon = true) {
+            // 리더에서 난 예외도 Flow로 넘겨야 수집 쪽(retryWhen)이 다시 붙는다. 그냥 두면 Flow가 영원히 멈춘다.
+            val cause = try {
+                val buffer = StringBuilder()
+                val chunk = CharArray(4096)
+                process.inputStream.reader().use { input ->
+                    while (true) {
+                        val n = input.read(chunk)
+                        if (n < 0) break
+                        buffer.append(chunk, 0, n)
+                        AdbOutputParser.takeTrackMessages(buffer).forEach { trySend(AdbOutputParser.parseDevices(it)) }
+                    }
                 }
+                AdbException("adb track-devices가 끝났습니다 (exit ${process.waitFor()})")
+            } catch (e: Throwable) {
+                e
+            } finally {
+                process.destroy()
             }
-            close(AdbException("adb track-devices가 끝났습니다 (exit ${process.waitFor()})"))
+            close(cause)
         }
-        awaitClose {
-            process.destroy()
-            reader.interrupt()
-        }
-    }.flowOn(Dispatchers.IO)
+        awaitClose { process.destroy() }
+    }.conflate().flowOn(Dispatchers.IO)
 
     override suspend fun push(serial: String, data: ByteArray, remotePath: String) {
         val temp = withContext(Dispatchers.IO) { File.createTempFile("adb-mirror-push", null).apply { writeBytes(data) } }
@@ -65,7 +76,7 @@ class AdbBinaryTransport(private val adb: File) : AdbTransport {
         }
         return object : RemoteProcess {
             override suspend fun awaitExit(): Int = runInterruptible(Dispatchers.IO) { process.waitFor() }
-            override suspend fun stop() = withContext(Dispatchers.IO) {
+            override suspend fun stop() = withContext(NonCancellable + Dispatchers.IO) {
                 process.destroy()
                 if (!process.waitFor(2, TimeUnit.SECONDS)) process.destroyForcibly()
                 Unit
@@ -77,8 +88,9 @@ class AdbBinaryTransport(private val adb: File) : AdbTransport {
         // tcp:0을 주면 adb가 빈 로컬 포트를 골라 출력한다.
         val port = text(run(listOf("-s", serial, "forward", "tcp:0", "localabstract:$name"))).trim().toIntOrNull()
             ?: throw AdbException("adb forward 포트를 해석하지 못했습니다")
+        // 취소 중에도 forward가 남지 않도록 정리는 NonCancellable로 돈다.
         val removeForward: suspend () -> Unit = {
-            runCatching { run(listOf("-s", serial, "forward", "--remove", "tcp:$port")) }
+            withContext(NonCancellable) { runCatching { run(listOf("-s", serial, "forward", "--remove", "tcp:$port")) } }
         }
         val socket = try {
             withContext(Dispatchers.IO) {
@@ -95,25 +107,32 @@ class AdbBinaryTransport(private val adb: File) : AdbTransport {
             source = SocketSource(socket.getInputStream()),
             sink = SocketSink(socket.getOutputStream()),
             onClose = {
-                withContext(Dispatchers.IO) { runCatching { socket.close() } }
+                withContext(NonCancellable + Dispatchers.IO) { runCatching { socket.close() } }
                 removeForward()
             },
         )
     }
 
-    /** adb 명령을 끝까지 실행한다. 실패하면 stderr(없으면 stdout)를 담아 [AdbException]. */
-    private suspend fun run(args: List<String>): ByteArray = withContext(Dispatchers.IO) {
-        val process = ProcessBuilder(listOf(adb.path) + args).start()
-        var stderr = ByteArray(0)
-        val errReader = thread(isDaemon = true) { stderr = process.errorStream.readBytes() }
-        val stdout = process.inputStream.readBytes()
-        val code = process.waitFor()
-        errReader.join()
+    /**
+     * adb 명령을 끝까지 실행한다. 실패하면 stderr(없으면 stdout)를 담아 [AdbException].
+     * 취소되면 프로세스를 강제 종료한다. 그래야 파이프를 읽던 쪽도 EOF로 풀려 코루틴이 끝난다.
+     */
+    private suspend fun run(args: List<String>): ByteArray = coroutineScope {
+        val process = withContext(Dispatchers.IO) { ProcessBuilder(listOf(adb.path) + args).start() }
+        val stdout = async(Dispatchers.IO) { process.inputStream.readBytes() }
+        val stderr = async(Dispatchers.IO) { process.errorStream.readBytes() }
+        val code = try {
+            runInterruptible(Dispatchers.IO) { process.waitFor() }
+        } catch (e: CancellationException) {
+            process.destroyForcibly()
+            throw e
+        }
+        val out = stdout.await()
         if (code != 0) {
-            val message = text(stderr.takeIf { it.isNotEmpty() } ?: stdout).trim()
+            val message = text(stderr.await().takeIf { it.isNotEmpty() } ?: out).trim()
             throw AdbException("adb ${args.joinToString(" ")} 실패 (exit $code): $message")
         }
-        stdout
+        out
     }
 
     private fun text(bytes: ByteArray) = bytes.decodeToString()

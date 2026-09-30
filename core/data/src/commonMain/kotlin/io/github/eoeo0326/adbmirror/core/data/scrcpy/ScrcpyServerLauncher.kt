@@ -5,7 +5,9 @@ import io.github.eoeo0326.adbmirror.core.adb.DeviceStream
 import io.github.eoeo0326.adbmirror.core.adb.EndOfStreamException
 import io.github.eoeo0326.adbmirror.core.adb.RemoteProcess
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 /** 기기에 올릴 scrcpy-server jar. [version]은 서버 실행 인자로 넘기며 jar와 정확히 같아야 한다. */
@@ -39,13 +41,18 @@ class ScrcpyServerLauncher(
         transport.push(serial, jar.bytes, DEVICE_PATH)
         val scid = random.nextInt(0, Int.MAX_VALUE).toString(16).padStart(8, '0')
         val process = transport.startProcess(serial, serverCommand(jar.version, scid, options), log)
+        var video: DeviceStream? = null
         try {
             val socketName = "scrcpy_$scid"
-            val video = connectVideo(serial, socketName)
+            video = connectVideo(serial, socketName)
             val control = if (options.control) transport.openLocalAbstract(serial, socketName) else null
             return ScrcpyConnection(video, control, process)
         } catch (e: Throwable) {
-            process.stop()
+            // 취소로 빠져나가는 경우에도 서버·소켓·forward를 남기지 않는다.
+            withContext(NonCancellable) {
+                video?.close()
+                process.stop()
+            }
             throw e
         }
     }
@@ -59,6 +66,9 @@ class ScrcpyServerLauncher(
             } catch (_: EndOfStreamException) {
                 stream.close()
                 delay(retryDelayMs)
+            } catch (e: Throwable) {
+                withContext(NonCancellable) { stream.close() }
+                throw e
             }
         }
         throw ScrcpyException("scrcpy 서버에 연결하지 못했습니다 (${maxAttempts * retryDelayMs}ms 초과)")

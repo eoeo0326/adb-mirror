@@ -4,6 +4,10 @@ import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyException
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ServerJar
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
+import io.github.eoeo0326.adbmirror.core.adb.ByteSource
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlin.random.Random
 import kotlin.test.Test
@@ -45,6 +49,31 @@ class ScrcpyServerLauncherTest {
         val connection = ScrcpyServerLauncher(transport, { jar }).launch("S1", MirrorOptions(720, 30, control = false))
         assertNull(connection.control)
         assertTrue("control=false" in transport.commands.single())
+    }
+
+    @Test
+    fun cancellingDuringConnectCleansUp() = runTest {
+        val stuck = FakeStream(object : ByteSource {
+            override suspend fun readFully(count: Int): ByteArray = awaitCancellation()
+            override suspend fun close() {}
+        })
+        val transport = FakeAdbTransport(ArrayDeque(listOf(stuck)))
+        val job = launch { ScrcpyServerLauncher(transport, { jar }).launch("S1", MirrorOptions(720, 30, control = true)) }
+        testScheduler.advanceUntilIdle()
+        job.cancelAndJoin()
+        assertTrue(stuck.closed, "읽던 영상 소켓을 닫아야 한다")
+        assertTrue(transport.process.stopped, "서버를 멈춰야 한다")
+    }
+
+    @Test
+    fun controlSocketFailureClosesVideoAndStopsServer() = runTest {
+        val video = FakeStream.of(byteArrayOf(0))
+        val transport = FakeAdbTransport(ArrayDeque(listOf(video))).apply { failOpenAt = 1 }
+        assertFailsWith<IllegalStateException> {
+            ScrcpyServerLauncher(transport, { jar }).launch("S1", MirrorOptions(720, 30, control = true))
+        }
+        assertTrue(video.closed)
+        assertTrue(transport.process.stopped)
     }
 
     @Test
