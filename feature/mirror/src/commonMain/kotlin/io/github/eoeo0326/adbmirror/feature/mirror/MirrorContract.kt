@@ -23,6 +23,8 @@ data class MirrorState(
     /** 이 창에서 마지막으로 저장한 녹화 파일(회전으로 나뉘면 여러 개) */
     val lastRecording: List<String> = emptyList(),
     val statusMessage: String? = null,
+    /** 지금 연결 시도(세션)의 번호. 연결할 때마다 늘고, [SessionScoped] 결과는 이 번호가 같을 때만 반영한다. */
+    val sessionId: Int = 0,
     /** 스크린샷을 받는 중. 연달아 눌러도 한 장씩만 받는다. */
     val capturingScreenshot: Boolean = false,
 ) {
@@ -86,18 +88,27 @@ sealed interface MirrorIntent {
     data object CloseConversion : MirrorIntent
 }
 
+/**
+ * 한 세션(연결 시도)에 속한 결과. 연결·녹화는 비동기라 이전 세션의 결과가 늦게 올 수 있어,
+ * [MirrorReducer]는 [sessionId]가 [MirrorState.sessionId]와 다르면 버린다.
+ */
+sealed interface SessionScoped {
+    val sessionId: Int
+}
+
 /** UseCase 실행 결과. [MirrorReducer]만 이것으로 State를 바꾼다. */
 sealed interface MirrorResult {
     data class SettingsLoaded(val settings: Settings) : MirrorResult
-    data object ConnectStarted : MirrorResult
-    data class ConnectFailed(val message: String) : MirrorResult
-    data class DeviceNameReceived(val name: String) : MirrorResult
-    data class VideoSizeChanged(val size: VideoSize) : MirrorResult
-    data class SessionEnded(val error: String?) : MirrorResult
-    data object RecordingStarting : MirrorResult
-    data class RecordingStarted(val startedAtMs: Long) : MirrorResult
-    data object RecordingStopping : MirrorResult
-    data object RecordingStopped : MirrorResult
+    /** 새 세션을 시작한다. 이 결과만 [MirrorState.sessionId]를 바꾼다. */
+    data class ConnectStarted(val sessionId: Int) : MirrorResult
+    data class ConnectFailed(override val sessionId: Int, val message: String) : MirrorResult, SessionScoped
+    data class DeviceNameReceived(override val sessionId: Int, val name: String) : MirrorResult, SessionScoped
+    data class VideoSizeChanged(override val sessionId: Int, val size: VideoSize) : MirrorResult, SessionScoped
+    data class SessionEnded(override val sessionId: Int, val error: String?) : MirrorResult, SessionScoped
+    data class RecordingStarting(override val sessionId: Int) : MirrorResult, SessionScoped
+    data class RecordingStarted(override val sessionId: Int, val startedAtMs: Long) : MirrorResult, SessionScoped
+    data class RecordingStopping(override val sessionId: Int) : MirrorResult, SessionScoped
+    data class RecordingStopped(override val sessionId: Int) : MirrorResult, SessionScoped
     data class RecordingSaved(val files: List<String>) : MirrorResult
     data class ConversionOpened(val draft: ConversionDraft) : MirrorResult
     data class ConversionOptionsChanged(val options: ConversionOptions) : MirrorResult

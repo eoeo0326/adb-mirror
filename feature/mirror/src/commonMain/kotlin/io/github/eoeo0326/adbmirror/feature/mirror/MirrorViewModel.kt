@@ -87,6 +87,7 @@ class MirrorViewModel(
     private val recordingLock = Mutex()
     private val clock = TimeSource.Monotonic.markNow()
     private var conversionJob: Job? = null
+    private var sessionSeq = 0
 
     init {
         viewModelScope.launch {
@@ -127,7 +128,8 @@ class MirrorViewModel(
         if (!current.canConnect) return
         val device = current.device
         if (shuttingDown) return
-        reduce(MirrorResult.ConnectStarted)
+        val id = ++sessionSeq
+        reduce(MirrorResult.ConnectStarted(id))
         sessionJob?.cancel()
         val started = CompletableDeferred<Unit>().also { pendingStart = it }
         sessionJob = viewModelScope.launch {
@@ -140,7 +142,7 @@ class MirrorViewModel(
                     throw e
                 } catch (e: Exception) {
                     val message = e.message ?: "연결에 실패했습니다"
-                    reduce(MirrorResult.ConnectFailed(message))
+                    reduce(MirrorResult.ConnectFailed(id, message))
                     _effects.trySend(MirrorEffect.Error(message))
                     return@launch
                 }
@@ -154,15 +156,15 @@ class MirrorViewModel(
                 started.complete(Unit)
                 session.events.collect { event ->
                     when (event) {
-                        is SessionEvent.DeviceName -> reduce(MirrorResult.DeviceNameReceived(event.name))
-                        is SessionEvent.VideoSizeChanged -> reduce(MirrorResult.VideoSizeChanged(event.size))
+                        is SessionEvent.DeviceName -> reduce(MirrorResult.DeviceNameReceived(id, event.name))
+                        is SessionEvent.VideoSizeChanged -> reduce(MirrorResult.VideoSizeChanged(id, event.size))
                         is SessionEvent.Ended -> {
                             _session.value = null
                             withContext(NonCancellable) {
-                                finishRecording(session)
+                                finishRecording(session, id)
                                 syncShowTouches()
                             }
-                            reduce(MirrorResult.SessionEnded(event.error))
+                            reduce(MirrorResult.SessionEnded(id, event.error))
                             event.error?.let { _effects.trySend(MirrorEffect.Error(it)) }
                             sessionJob?.cancel()
                         }
@@ -197,16 +199,17 @@ class MirrorViewModel(
         val session = _session.value ?: return
         val s = _state.value
         if (s.connection !is Connection.Mirroring || s.recording != RecordingState.Idle) return
-        reduce(MirrorResult.RecordingStarting)
+        val id = s.sessionId
+        reduce(MirrorResult.RecordingStarting(id))
         viewModelScope.launch {
             recordingLock.withLock {
                 try {
                     startRecording(session)
-                    reduce(MirrorResult.RecordingStarted(clock.elapsedNow().inWholeMilliseconds))
+                    reduce(MirrorResult.RecordingStarted(id, clock.elapsedNow().inWholeMilliseconds))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    reduce(MirrorResult.RecordingStopped)
+                    reduce(MirrorResult.RecordingStopped(id))
                     _effects.trySend(MirrorEffect.Error("녹화를 시작하지 못했습니다: ${e.message ?: e::class.simpleName}"))
                 }
             }
@@ -216,20 +219,21 @@ class MirrorViewModel(
     private fun endRecording() {
         val session = _session.value ?: return
         if (_state.value.recording !is RecordingState.Recording) return
-        reduce(MirrorResult.RecordingStopping)
-        viewModelScope.launch { withContext(NonCancellable) { finishRecording(session) } }
+        val id = _state.value.sessionId
+        reduce(MirrorResult.RecordingStopping(id))
+        viewModelScope.launch { withContext(NonCancellable) { finishRecording(session, id) } }
     }
 
     /** 그 세션의 녹화를 끝내고 결과를 알린다. 녹화 중이 아니면 아무것도 하지 않는다. */
-    private suspend fun finishRecording(session: MirrorSession) {
+    private suspend fun finishRecording(session: MirrorSession, sessionId: Int) {
         val recording = try {
             recordingLock.withLock { stopRecording(session) }
         } catch (e: Exception) {
-            reduce(MirrorResult.RecordingStopped)
+            reduce(MirrorResult.RecordingStopped(sessionId))
             _effects.trySend(MirrorEffect.Error("녹화를 마무리하지 못했습니다: ${e.message ?: e::class.simpleName}"))
             return
         } ?: return
-        reduce(MirrorResult.RecordingStopped)
+        reduce(MirrorResult.RecordingStopped(sessionId))
         if (recording.files.isNotEmpty()) reduce(MirrorResult.RecordingSaved(recording.files))
         _effects.trySend(
             if (recording.files.isEmpty()) MirrorEffect.ShowMessage("녹화된 화면이 없어 파일을 만들지 않았습니다") else MirrorEffect.RecordingSaved(recording.files),
@@ -300,7 +304,7 @@ class MirrorViewModel(
         conversionJob?.cancel()
         pendingStart?.await()
         _session.value?.let {
-            finishRecording(it)
+            finishRecording(it, _state.value.sessionId)
             stopMirroring(it)
         }
         _session.value = null
