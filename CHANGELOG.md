@@ -7,6 +7,9 @@
 ### 변경
 - Swift 프로토타입을 `macos-swift/`로 이동 (실행: `cd macos-swift && ./run.sh`)
 
+### 추가
+- KMP/CMP Gradle 멀티모듈 뼈대: `core/domain` · `core/adb` · `core/data` · `feature/mirror` · `composeApp`(Desktop · Web) · `androidApp`
+
 ## [0.2.0] - 2026-09-30
 
 Phase 0(기준 데이터) 완료 릴리즈입니다.
