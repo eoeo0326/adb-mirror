@@ -74,6 +74,30 @@ class MirrorReducerTest {
     }
 
     @Test
+    fun lateRecordingResultsAfterSessionEndAreIgnored() {
+        val ended = MirrorState().apply(
+            MirrorResult.ConnectStarted("A"),
+            MirrorResult.DeviceNameReceived("X"),
+            MirrorResult.RecordingStarting,
+            MirrorResult.SessionEnded(null),
+        )
+        assertEquals(RecordingState.Idle, ended.recording)
+        assertEquals(ended, ended.apply(MirrorResult.RecordingStarted(10)))
+        assertEquals(ended, ended.apply(MirrorResult.RecordingStopping))
+
+        // 다음 세션에서는 녹화를 다시 시작할 수 있어야 한다.
+        val next = ended.apply(MirrorResult.ConnectStarted("A"), MirrorResult.DeviceNameReceived("X"), MirrorResult.RecordingStarting)
+        assertEquals(RecordingState.Starting, next.recording)
+    }
+
+    @Test
+    fun recordingStartedWithoutStartingIsIgnored() {
+        val mirroring = MirrorState().apply(MirrorResult.ConnectStarted("A"), MirrorResult.DeviceNameReceived("X"))
+        assertEquals(RecordingState.Idle, mirroring.apply(MirrorResult.RecordingStarted(1)).recording)
+        assertEquals(RecordingState.Idle, mirroring.apply(MirrorResult.RecordingStopping).recording)
+    }
+
+    @Test
     fun sessionEndWithErrorReturnsToListAndStopsRecording() {
         val state = MirrorState().apply(
             MirrorResult.ConnectStarted("A"),

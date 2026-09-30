@@ -42,8 +42,17 @@ object MirrorReducer {
                 state
             }
 
-        is MirrorResult.RecordingStarted -> state.copy(recording = RecordingState.Recording(result.startedAtMs))
-        MirrorResult.RecordingStopping -> state.copy(recording = RecordingState.Stopping)
+        // 녹화 시작·정지는 비동기라 세션이 먼저 끝날 수 있다. 끝난 세션의 늦은 결과로 녹화 상태를 되살리지 않는다.
+        is MirrorResult.RecordingStarted ->
+            if (state.connection is Connection.Mirroring && state.recording == RecordingState.Starting) {
+                state.copy(recording = RecordingState.Recording(result.startedAtMs))
+            } else {
+                state
+            }
+
+        MirrorResult.RecordingStopping ->
+            if (state.recording is RecordingState.Recording) state.copy(recording = RecordingState.Stopping) else state
+
         MirrorResult.RecordingStopped -> state.copy(recording = RecordingState.Idle)
 
         is MirrorResult.ConversionProgressed ->
