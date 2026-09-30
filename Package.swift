@@ -7,7 +7,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "adb-mirror",
-            resources: [.copy("Resources/scrcpy-server")]
+            resources: [
+                .copy("Resources/scrcpy-server"),
+                .copy("Resources/AppIcon.png"),
+            ]
         ),
     ]
 )

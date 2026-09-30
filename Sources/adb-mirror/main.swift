@@ -272,6 +272,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 let options = Options.parse(Array(CommandLine.arguments.dropFirst()))
 let app = NSApplication.shared
 app.setActivationPolicy(.regular)
+// .app 번들이 아니라 실행 파일로 뜨므로 Dock 아이콘을 직접 지정한다.
+if let url = Bundle.module.url(forResource: "AppIcon", withExtension: "png"), let icon = NSImage(contentsOf: url) {
+    app.applicationIconImage = icon
+}
 let delegate = AppDelegate(options: options)
 app.delegate = delegate
 app.run()
