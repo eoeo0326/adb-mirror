@@ -2,10 +2,10 @@ package io.github.eoeo0326.adbmirror.feature.mirror
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
-import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -25,18 +25,19 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Intent → UseCase → [MirrorResult] → [MirrorReducer] → [state].
+ * 기기 하나의 미러링 창. Intent → UseCase → [MirrorResult] → [MirrorReducer] → [state].
  * 진행 중인 세션은 영상 패킷 때문에 State 밖의 [session]으로 따로 내보낸다.
+ * 사용자가 목록에서 고른 기기로 만들어지므로 만들자마자 연결한다.
  */
 class MirrorViewModel(
-    getDevices: GetDevicesUseCase,
+    device: Device,
     getSettings: GetSettingsUseCase,
     private val startMirroring: StartMirroringUseCase,
     private val stopMirroring: StopMirroringUseCase,
     private val sendTouch: SendTouchUseCase,
     private val updateSettings: UpdateSettingsUseCase,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(MirrorState())
+    private val _state = MutableStateFlow(MirrorState(device))
     val state: StateFlow<MirrorState> = _state.asStateFlow()
 
     private val _session = MutableStateFlow<MirrorSession?>(null)
@@ -48,14 +49,12 @@ class MirrorViewModel(
     private var sessionJob: Job? = null
 
     init {
-        viewModelScope.launch { getDevices().collect { reduce(MirrorResult.DevicesLoaded(it)) } }
         viewModelScope.launch { getSettings().collect { reduce(MirrorResult.SettingsLoaded(it)) } }
+        connect()
     }
 
     fun onIntent(intent: MirrorIntent) {
         when (intent) {
-            MirrorIntent.RefreshDevices -> Unit // 기기 목록은 추적 Flow로 계속 갱신된다
-            is MirrorIntent.SelectDevice -> reduce(MirrorResult.DeviceSelected(intent.serial))
             MirrorIntent.Connect -> connect()
             MirrorIntent.Disconnect -> viewModelScope.launch { _session.value?.let { stopMirroring(it) } }
             is MirrorIntent.Touch -> touch(intent)
@@ -68,8 +67,8 @@ class MirrorViewModel(
     private fun connect() {
         val current = _state.value
         if (!current.canConnect) return
-        val device = current.devices.firstOrNull { it.serial == current.selectedSerial } ?: return
-        reduce(MirrorResult.ConnectStarted(device.serial))
+        val device = current.device
+        reduce(MirrorResult.ConnectStarted)
         sessionJob?.cancel()
         sessionJob = viewModelScope.launch {
             val session = try {

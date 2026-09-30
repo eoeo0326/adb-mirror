@@ -10,6 +10,7 @@
 - Desktop KMP 앱 미러링: 기기 목록에서 기기를 골라 연결하면 FFmpeg(LGPL)로 디코딩해 표시, 클릭·드래그 터치, 보기 전용 토글, 연결 끊기
   - 스크롤 중 약 60fps. CPU는 Swift 프로토타입(하드웨어 디코딩)보다 높아 #41에서 하드웨어 디코딩 적용 예정
 - `MirrorViewModel`(Intent → UseCase → Reducer), 창을 닫거나 종료 신호로 끝나도 서버·forward 정리
+- Desktop 창 구성: 기기 목록 창은 계속 떠 있고 기기마다 미러링 창을 따로 엶. 이미 열린 기기는 그 창을 앞으로, 창 크기는 영상 비율(화면 85% 이내)에 맞춤, 연결이 끊기면 창 안에서 다시 연결
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30
