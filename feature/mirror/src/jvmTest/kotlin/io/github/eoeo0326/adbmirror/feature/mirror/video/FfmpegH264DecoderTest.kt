@@ -91,4 +91,31 @@ class FfmpegH264DecoderTest {
         }
         assertTrue(edge.toDouble() / (sh * 3) < 20.0, "오른쪽 끝 열 차이 ${edge.toDouble() / (sh * 3)}")
     }
+
+    /** 하드웨어 장치를 붙인 채 열기가 실패하면 소프트웨어로 다시 열어 정상 디코딩한다. */
+    @Test
+    fun fallsBackToSoftwareWhenHardwareOpenFails() = runBlocking {
+        var hardwareAttempts = 0
+        val decoder = FfmpegH264Decoder(hardware = true) { ctx, codec ->
+            if (ctx.hw_device_ctx() != null) {
+                hardwareAttempts++
+                -1 // 하드웨어 열기 실패를 흉내 낸다
+            } else {
+                org.bytedeco.ffmpeg.global.avcodec.avcodec_open2(ctx, codec, null as org.bytedeco.ffmpeg.avutil.AVDictionary?)
+            }
+        }
+        decoder.use {
+            assertEquals("software", it.backend)
+            val dir = File(System.getProperty("fixtures.dir")!!)
+            val parser = VideoStreamParser(ByteArraySource(File(dir, "scrcpy-v4.1-h264-rotate.bin").readBytes()))
+            parser.readHeader()
+            var frames = 0
+            while (frames < 5) {
+                val item = parser.readItem() as? VideoStreamParser.Item.Packet ?: continue
+                it.decode(item.packet.data) { _, _, _ -> frames++ }
+            }
+        }
+        // 하드웨어 장치가 없는 러너(Linux CI)에서는 시도 자체가 없다.
+        println("hardware open attempts=$hardwareAttempts")
+    }
 }
