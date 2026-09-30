@@ -41,7 +41,11 @@ class FileRecordingRepository(
     private val now: () -> LocalDateTime = LocalDateTime::now,
     private val converter: AnimationConverter = AnimationConverter(FfmpegVideoFrameSource(), FfmpegWebpFrameEncoder.createOrNull()),
 ) : RecordingRepository {
-    private class Active(val recorder: Recorder, val job: Job)
+    private class Active(val recorder: Recorder) {
+        lateinit var job: Job
+        /** 녹화기에 넣은 패킷 수(테스트가 정지 전에 처리를 기다리는 데 쓴다). */
+        @Volatile var accepted = 0
+    }
 
     private val lock = Mutex()
     private val active = mutableMapOf<String, Active>()
@@ -51,10 +55,14 @@ class FileRecordingRepository(
         val dir = (outputDir?.let(::File) ?: defaultOutputDir(home)).also { it.mkdirs() }
         val base = "adb-mirror_" + session.serial.replace(Regex("[^A-Za-z0-9._-]"), "_") + "_" + now().format(STAMP)
         val recorder = Recorder { index -> FilePart(uniqueFile(dir, base, index)) }
+        val self = Active(recorder)
         // UNDISPATCHED: collect가 구독을 등록한 뒤에야 start가 반환되므로, 뒤이은 key frame 요청의 응답을 놓치지 않는다.
         val job = scope.launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
             try {
-                session.packets.collect { recorder.accept(it) }
+                session.packets.collect {
+                    recorder.accept(it)
+                    self.accepted++
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -62,9 +70,16 @@ class FileRecordingRepository(
                 System.err.println("녹화를 계속하지 못했습니다(${session.serial}): ${e.message}")
             }
         }
-        active[session.serial] = Active(recorder, job)
+        self.job = job
+        active[session.serial] = self
     }
 
+    internal suspend fun acceptedCount(serial: String): Int = lock.withLock { active[serial]?.accepted ?: 0 }
+
+    /**
+     * 정지하면 받은 뒤 아직 처리하지 못한 마지막 패킷 하나는 버려질 수 있다(수집을 취소하므로).
+     * 녹화 끝의 한 프레임이라 사용자에게는 차이가 없다.
+     */
     override suspend fun stop(serial: String): Recording? = withContext(NonCancellable) {
         val a = lock.withLock { active.remove(serial) } ?: return@withContext null
         a.job.cancelAndJoin() // 이 뒤로는 recorder를 만지는 코루틴이 없다
