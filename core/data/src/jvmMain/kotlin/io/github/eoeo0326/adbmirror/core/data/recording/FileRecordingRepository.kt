@@ -76,7 +76,7 @@ class FileRecordingRepository(
 
     override fun supportedFormats(): Set<AnimatedFormat> = converter.supportedFormats
 
-    /** 원본 옆 `<이름>.gif|webp`(있으면 `_2`…)로 쓴다. 끝날 때까지 `.part`에 쓰고, 취소·실패하면 지운다. */
+    /** 원본 옆 `<이름>.gif|webp`(있으면 `_2`…)로 쓴다. 끝날 때까지 임시 `.part` 파일에 쓰고, 취소·실패하면 지운다. */
     override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> = flow {
         val source = File(file)
         val ext = if (options.format == AnimatedFormat.Gif) "gif" else "webp"
@@ -85,7 +85,8 @@ class FileRecordingRepository(
         val target = generateSequence(1) { it + 1 }
             .map { n -> File(dir, if (n == 1) "$base.$ext" else "${base}_$n.$ext") }
             .first { !it.exists() }
-        val tmp = File(dir, target.name + ".part")
+        // 취소 직후 다시 변환해도 이전 흐름의 임시 파일과 겹치지 않게 이름을 따로 받는다.
+        val tmp = File.createTempFile(target.name + ".", ".part", dir)
         try {
             val bytes = converter.convert(file, options) { emit(ConversionProgress.Running(it)) }
             tmp.writeBytes(bytes)

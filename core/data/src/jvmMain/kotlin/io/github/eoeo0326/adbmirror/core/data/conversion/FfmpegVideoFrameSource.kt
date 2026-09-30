@@ -114,12 +114,12 @@ class FfmpegVideoFrameSource : VideoFrameSource {
             check(index >= 0) { "영상 트랙이 없습니다" }
             val stream = fmt.streams(index)
             val codec = avcodec.avcodec_find_decoder(stream.codecpar().codec_id()) ?: error("디코더가 없습니다")
-            decoder = avcodec.avcodec_alloc_context3(codec).also {
-                avcodec.avcodec_parameters_to_context(it, stream.codecpar())
-                it.thread_count(0)
-                check(avcodec.avcodec_open2(it, codec, null as AVDictionary?) >= 0) { "디코더를 열지 못했습니다" }
-            }
-            return block(fmt, stream, decoder)
+            // 먼저 대입해 두어 열기에 실패해도 finally가 컨텍스트를 해제한다.
+            val ctx = avcodec.avcodec_alloc_context3(codec).also { decoder = it }
+            avcodec.avcodec_parameters_to_context(ctx, stream.codecpar())
+            ctx.thread_count(0)
+            check(avcodec.avcodec_open2(ctx, codec, null as AVDictionary?) >= 0) { "디코더를 열지 못했습니다" }
+            return block(fmt, stream, ctx)
         } finally {
             decoder?.let { avcodec.avcodec_free_context(it) }
             avformat.avformat_close_input(fmt)
