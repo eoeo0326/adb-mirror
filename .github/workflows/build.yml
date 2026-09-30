@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   test:
-    name: 테스트 (JVM · Web)
+    name: 테스트 (JVM · Web) · Android 빌드
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -28,6 +28,8 @@ jobs:
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v5
       - run: ./gradlew allTests --continue
+      # Android 앱은 설치 파일을 따로 만들지 않지만, 빌드가 깨지지 않는지 본다.
+      - run: ./gradlew :androidApp:assembleDebug
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
