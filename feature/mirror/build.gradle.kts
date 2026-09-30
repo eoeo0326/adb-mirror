@@ -18,12 +18,15 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(projects.core.domain)
+            api(projects.core.domain)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
             implementation(libs.compose.material3)
             implementation(libs.androidx.lifecycle.viewmodel.compose)
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
         }
     }
 }
