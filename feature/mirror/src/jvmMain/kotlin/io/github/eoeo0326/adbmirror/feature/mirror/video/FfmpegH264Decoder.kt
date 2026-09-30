@@ -31,6 +31,35 @@ class FfmpegH264Decoder internal constructor(
         fun onFrame(width: Int, height: Int, bgra: ByteArray)
     }
 
+    /** 색 변환 없이 받은 YUV 평면. 배열은 다음 [decode] 호출에서 덮어쓰인다. */
+    fun interface YuvSink {
+        fun onFrame(frame: YuvFrame)
+    }
+
+    /**
+     * I420(Y·U·V) 평면. 각 평면은 줄마다 stride바이트(패딩 포함)이고, U·V는 가로·세로 절반(올림)이다.
+     * NV12(하드웨어 디코더 출력)는 UV를 U·V로 나눠 담는다. [bt709]·[fullRange]는 스트림의 색 공간 정보다.
+     */
+    class YuvFrame(
+        val width: Int,
+        val height: Int,
+        val y: ByteArray,
+        val yStride: Int,
+        val u: ByteArray,
+        val v: ByteArray,
+        /** U·V 평면의 줄 길이(같다) */
+        val cStride: Int,
+        val bt709: Boolean,
+        val fullRange: Boolean,
+    )
+
+    /**
+     * 설정하면 NV12·YUV420P 프레임은 BGRA로 바꾸지 않고 평면 그대로 넘긴다(GPU에서 변환). 다른 형식은 [FrameSink]로 간다.
+     */
+    var yuvSink: YuvSink? = null
+    private val planes = arrayOf(ByteArray(0), ByteArray(0), ByteArray(0))
+    private var vPlane = ByteArray(0)
+
     private val context: AVCodecContext
     private val packet: AVPacket = avcodec.av_packet_alloc()
     private val frame: AVFrame = avutil.av_frame_alloc()
@@ -124,6 +153,7 @@ class FfmpegH264Decoder internal constructor(
         val w = src.width()
         val h = src.height()
         if (w <= 0 || h <= 0) return
+        yuvSink?.let { yuv -> if (sendYuv(src, w, h, yuv)) return }
         // swscale의 SIMD(NEON·SSE) 색 변환은 너비가 16의 배수일 때만 쓰인다(세로 폰은 606처럼 아닌 경우가 많다).
         // 디코더 버퍼는 줄 끝이 정렬돼 있으므로, 넉넉하면 변환 너비만 16의 배수로 올리고 복사할 때 원래 너비만 가져온다.
         val cw = alignedWidth(src, w)
@@ -155,6 +185,60 @@ class FfmpegH264Decoder internal constructor(
         }
         plane.position(0)
         sink.onFrame(w, h, dstBytes)
+    }
+
+    /** NV12·YUV420P면 평면을 복사해 [sink]로 넘기고 true. 다른 형식이면 false(BGRA로 변환). */
+    private fun sendYuv(src: AVFrame, w: Int, h: Int, sink: YuvSink): Boolean {
+        val fmt = src.format()
+        val nv12 = fmt == avutil.AV_PIX_FMT_NV12
+        val i420 = fmt == avutil.AV_PIX_FMT_YUV420P || fmt == avutil.AV_PIX_FMT_YUVJ420P
+        if (!nv12 && !i420) return false
+        val cw = (w + 1) / 2
+        val ch = (h + 1) / 2
+        val ySize = src.linesize(0) * h
+        if (planes[0].size != ySize) planes[0] = ByteArray(ySize)
+        src.data(0).position(0).get(planes[0], 0, ySize)
+        val cStride: Int
+        if (nv12) {
+            // UV가 번갈아 들어 있다. U·V 평면으로 나눈다(Skia 래스터 이미지가 2채널 형식을 받지 않음).
+            cStride = cw
+            val uvStride = src.linesize(1)
+            val uvSize = uvStride * ch
+            if (planes[2].size < uvSize) planes[2] = ByteArray(uvSize) // 교차 평면을 잠시 담는 곳
+            if (planes[1].size != cw * ch) planes[1] = ByteArray(cw * ch)
+            val uv = planes[2]
+            src.data(1).position(0).get(uv, 0, uvSize)
+            val u = planes[1]
+            if (vPlane.size != cw * ch) vPlane = ByteArray(cw * ch)
+            val v = vPlane
+            for (row in 0 until ch) {
+                var s = row * uvStride
+                var o = row * cw
+                for (x in 0 until cw) {
+                    u[o] = uv[s]
+                    v[o] = uv[s + 1]
+                    s += 2
+                    o++
+                }
+            }
+        } else {
+            cStride = src.linesize(1)
+            val cSize = cStride * ch
+            if (planes[1].size != cSize) planes[1] = ByteArray(cSize)
+            if (vPlane.size != cSize) vPlane = ByteArray(cSize)
+            src.data(1).position(0).get(planes[1], 0, cSize)
+            src.data(2).position(0).get(vPlane, 0, cSize)
+        }
+        sink.onFrame(
+            YuvFrame(
+                w, h,
+                planes[0], src.linesize(0),
+                planes[1], vPlane, cStride,
+                bt709 = src.colorspace() == avutil.AVCOL_SPC_BT709,
+                fullRange = src.color_range() == avutil.AVCOL_RANGE_JPEG || fmt == avutil.AV_PIX_FMT_YUVJ420P,
+            ),
+        )
+        return true
     }
 
     /** 16의 배수로 올린 너비. 원본 프레임의 어느 평면이든 줄 길이가 모자라면 그대로 [w]. */

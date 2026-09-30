@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.feature.mirror.video
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -11,6 +12,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asComposeImageBitmap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
@@ -24,6 +27,7 @@ import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.ColorAlphaType
 import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.Rect as SkRect
 import kotlin.math.roundToInt
 
 @Composable
@@ -34,14 +38,28 @@ actual fun VideoSurface(
     modifier: Modifier,
 ) {
     val store = remember(session) { FrameStore() }
+    val yuv = remember(session) { YuvStore() }
+    DisposableEffect(yuv) { onDispose { yuv.close() } }
     val version by store.version.collectAsState()
+    val yuvVersion by yuv.version.collectAsState()
     val touch by rememberUpdatedState(onTouch)
 
     // FFmpeg 디코더는 전용 스레드 하나에서만 쓴다. 세션이 바뀌거나 화면을 떠나면(취소) 그 스레드에서 닫는다.
     LaunchedEffect(session) {
         val stats = if (System.getenv("ADB_MIRROR_STATS") == "1") FpsLogger() else null
-        val newDecoder = { FfmpegH264Decoder().also { if (stats != null) println("decoder=${it.backend}") } }
+        val gpuYuv = YuvRenderer.enabled()
+        val newDecoder = {
+            FfmpegH264Decoder().also { decoder ->
+                if (stats != null) println("decoder=${decoder.backend} render=${if (gpuYuv) "gpu-yuv" else "bgra"}")
+                // YUV 평면은 디코더 스레드에서 바로 Skia 이미지로 만들어 넘긴다(한 번 복사).
+                if (gpuYuv) decoder.yuvSink = FfmpegH264Decoder.YuvSink { f ->
+                    yuv.publish(YuvRenderer.upload(f))
+                    stats?.frame()
+                }
+            }
+        }
         decodeOnDedicatedThread(session.packets, newDecoder) { w, h, bgra ->
+            yuv.clear() // 이 형식은 BGRA로 그린다
             store.publish(w, h, bgra)
             stats?.frame()
         }
@@ -73,6 +91,13 @@ actual fun VideoSurface(
             }
         },
     ) {
+        if (yuvVersion > 0L) {
+            yuv.take()?.let { planes ->
+                val r = fitRect(size.width, size.height, VideoSize(planes.width, planes.height))
+                drawIntoCanvas { YuvRenderer.draw(it.nativeCanvas, planes, SkRect.makeXYWH(r.left, r.top, r.width, r.height)) }
+                return@Canvas
+            }
+        }
         if (version == 0L) return@Canvas
         val bitmap = store.latestBitmap() ?: return@Canvas
         val r = fitRect(size.width, size.height, VideoSize(bitmap.width, bitmap.height))
@@ -81,6 +106,57 @@ actual fun VideoSurface(
             dstOffset = IntOffset(r.left.roundToInt(), r.top.roundToInt()),
             dstSize = IntSize(r.width.roundToInt(), r.height.roundToInt()),
         )
+    }
+}
+
+/**
+ * 디코더 스레드가 만든 최신 YUV 이미지를 UI가 가져가는 곳. 보여 주지 못하고 새 것에 밀린 이미지는 디코더 스레드가,
+ * 보여 준 이미지는 다음 것을 가져갈 때 UI 스레드가 닫는다.
+ */
+private class YuvStore : AutoCloseable {
+    private val lock = Any()
+    private var pending: YuvRenderer.Planes? = null
+    private var shown: YuvRenderer.Planes? = null
+    private var closed = false
+
+    private val _version = MutableStateFlow(0L)
+    val version: StateFlow<Long> = _version
+
+    fun publish(planes: YuvRenderer.Planes) {
+        synchronized(lock) {
+            if (closed) return planes.close()
+            pending?.close()
+            pending = planes
+        }
+        _version.value++
+    }
+
+    /** UI 스레드에서만 부른다. 새 이미지가 있으면 그것으로 바꾸고, 지금 그릴 이미지를 돌려준다. */
+    fun take(): YuvRenderer.Planes? = synchronized(lock) {
+        pending?.let { next ->
+            shown?.close()
+            shown = next
+            pending = null
+        }
+        shown
+    }
+
+    /** 디코더가 BGRA 경로로 바꿨을 때 YUV 화면을 더 그리지 않게 한다. */
+    fun clear() {
+        synchronized(lock) {
+            if (pending == null && shown == null) return
+            pending?.close()
+            pending = null
+        }
+        _version.value = 0L
+    }
+
+    override fun close() = synchronized(lock) {
+        closed = true
+        pending?.close()
+        shown?.close()
+        pending = null
+        shown = null
     }
 }
 

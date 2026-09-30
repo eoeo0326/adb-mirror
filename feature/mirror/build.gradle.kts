@@ -33,6 +33,7 @@ kotlin {
         }
         jvmTest.dependencies {
             implementation(projects.core.data) // fixture 파서
+            implementation(compose.desktop.currentOs) // YUV 셰이더 테스트가 Skia(skiko) 네이티브를 쓴다
         }
         jvmMain.dependencies {
             // FFmpeg(LGPL 빌드) H.264 디코더. 네이티브 라이브러리는 빌드하는 OS·아키텍처 것만 넣는다.
