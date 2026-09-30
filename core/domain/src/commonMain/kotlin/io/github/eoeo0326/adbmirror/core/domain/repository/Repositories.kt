@@ -20,6 +20,16 @@ interface DeviceRepository {
     suspend fun setShowTouches(serial: String, enabled: Boolean): Boolean
 }
 
+/** 무선 디버깅 기기 페어링·연결. 지원하지 않는 플랫폼은 구현하지 않는다(화면에 무선 항목이 나오지 않음). */
+interface WirelessDeviceRepository {
+    suspend fun pair(host: String, port: Int, code: String)
+
+    /** 연결한 기기. 기기 목록([DeviceRepository.devices])에도 나타난다. */
+    suspend fun connect(host: String, port: Int): Device
+
+    suspend fun disconnect(serial: String)
+}
+
 interface MirrorRepository {
     suspend fun start(serial: String, options: MirrorOptions): MirrorSession
 }

@@ -21,5 +21,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        androidMain.dependencies {
+            // 기기 안에서 다른 기기(또는 자기 자신)에 adb로 붙는다: 무선 페어링·연결·스트림
+            implementation(libs.kadb)
+        }
     }
 }

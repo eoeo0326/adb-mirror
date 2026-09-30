@@ -15,6 +15,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,7 +44,8 @@ fun DeviceListScreen(state: DeviceListState, onIntent: (DeviceListIntent) -> Uni
         Text("기기 선택", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         if (state.devices.isEmpty()) {
             Text(
-                "연결된 adb 기기가 없습니다.\n기기를 USB로 연결하고, 개발자 옵션에서 USB 디버깅을 켜 주세요.",
+                if (state.wireless != null) "연결된 기기가 없습니다.\n아래에서 무선 디버깅 기기를 페어링·연결하세요."
+                else "연결된 adb 기기가 없습니다.\n기기를 USB로 연결하고, 개발자 옵션에서 USB 디버깅을 켜 주세요.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -51,8 +57,10 @@ fun DeviceListScreen(state: DeviceListState, onIntent: (DeviceListIntent) -> Uni
                     selected = device.serial == state.selectedSerial,
                     open = device.serial in state.openSerials,
                     onClick = { onIntent(DeviceListIntent.Select(device.serial)) },
+                    onDisconnect = if (state.wireless != null) ({ onIntent(DeviceListIntent.Disconnect(device.serial)) }) else null,
                 )
             }
+            state.wireless?.let { form -> item(key = "wireless") { WirelessCard(form, onIntent) } }
         }
         val opening = state.selected?.serial in state.openSerials
         Button(onClick = { onIntent(DeviceListIntent.Open) }, enabled = state.canOpen, modifier = Modifier.fillMaxWidth()) {
@@ -62,7 +70,7 @@ fun DeviceListScreen(state: DeviceListState, onIntent: (DeviceListIntent) -> Uni
 }
 
 @Composable
-private fun DeviceRow(device: Device, selected: Boolean, open: Boolean, onClick: () -> Unit) {
+private fun DeviceRow(device: Device, selected: Boolean, open: Boolean, onClick: () -> Unit, onDisconnect: (() -> Unit)?) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(10.dp)
     Row(
@@ -87,5 +95,50 @@ private fun DeviceRow(device: Device, selected: Boolean, open: Boolean, onClick:
             style = MaterialTheme.typography.bodySmall,
             color = if (device.isSelectable) colors.primary else colors.onSurfaceVariant,
         )
+        if (onDisconnect != null && !open) TextButton(onClick = onDisconnect) { Text("끊기") }
     }
+}
+
+@Composable
+private fun WirelessCard(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    fun edit(f: WirelessForm) = onIntent(DeviceListIntent.EditWireless(f))
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, colors.outlineVariant, RoundedCornerShape(10.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("무선 기기 추가", fontWeight = FontWeight.Medium)
+        Text(
+            "기기에서 설정 > 개발자 옵션 > 무선 디버깅을 켜세요. 처음 한 번은 \"페어링 코드로 기기 페어링\"의 값으로 페어링하고, 그다음부터는 무선 디버깅 화면의 IP 주소·포트로 연결합니다. " +
+                "이 폰 자신을 페어링할 때는 페어링 창이 닫히지 않도록 이 앱을 팝업 화면이나 화면 분할로 띄우세요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = colors.onSurfaceVariant,
+        )
+        Field("IP 주소", form.host, KeyboardType.Uri, !form.busy) { edit(form.copy(host = it)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Field("페어링 포트", form.pairPort, KeyboardType.Number, !form.busy, Modifier.weight(1f)) { edit(form.copy(pairPort = it)) }
+            Field("코드 6자리", form.code, KeyboardType.Number, !form.busy, Modifier.weight(1f)) { edit(form.copy(code = it)) }
+            OutlinedButton(onClick = { onIntent(DeviceListIntent.Pair) }, enabled = !form.busy) { Text("페어링") }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Field("연결 포트", form.connectPort, KeyboardType.Number, !form.busy, Modifier.weight(1f)) { edit(form.copy(connectPort = it)) }
+            Button(onClick = { onIntent(DeviceListIntent.ConnectWireless) }, enabled = !form.busy) { Text("연결") }
+        }
+        form.message?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = if (form.failed) colors.error else colors.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun Field(label: String, value: String, type: KeyboardType, enabled: Boolean, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { onChange(it.trim()) },
+        label = { Text(label) },
+        singleLine = true,
+        enabled = enabled,
+        keyboardOptions = KeyboardOptions(keyboardType = type),
+        modifier = modifier.fillMaxWidth(),
+    )
 }

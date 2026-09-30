@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.core.data.scrcpy
 import io.github.eoeo0326.adbmirror.core.adb.AdbTransport
 import io.github.eoeo0326.adbmirror.core.adb.DeviceStream
 import io.github.eoeo0326.adbmirror.core.adb.EndOfStreamException
+import io.github.eoeo0326.adbmirror.core.adb.SocketNotReadyException
 import io.github.eoeo0326.adbmirror.core.adb.RemoteProcess
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import kotlinx.coroutines.NonCancellable
@@ -59,7 +60,13 @@ class ScrcpyServerLauncher(
 
     private suspend fun connectVideo(serial: String, socketName: String): DeviceStream {
         repeat(maxAttempts) {
-            val stream = transport.openLocalAbstract(serial, socketName)
+            // 서버가 아직 소켓을 열지 않았다: 전송에 따라 연결 거절(Kadb) 또는 연결 후 바로 끝남(adb forward).
+            val stream = try {
+                transport.openLocalAbstract(serial, socketName)
+            } catch (_: SocketNotReadyException) {
+                delay(retryDelayMs)
+                return@repeat
+            }
             try {
                 stream.source.readFully(1) // dummy byte
                 return stream
