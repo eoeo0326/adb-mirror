@@ -43,13 +43,15 @@ swift build -c release
 
 ## KMP 앱 (개발 중)
 
-Kotlin Multiplatform + Compose Multiplatform 버전은 아직 뼈대 단계입니다. JDK 21과 Android SDK(compileSdk 37)가 필요합니다.
+Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop에서 기기 선택 → 미러링 → 터치까지 됩니다(Android·Web은 준비 중). JDK 21과 Android SDK(compileSdk 37)가 필요하고, scrcpy-server는 빌드할 때 Gradle이 받아 옵니다.
 
 ```bash
 ./gradlew :composeApp:run                         # Desktop
 ./gradlew :androidApp:installDebug                # Android
 ./gradlew :composeApp:wasmJsBrowserDevelopmentRun # Web
 ./gradlew allTests                                # 공통 테스트
+./gradlew :core:data:jvmTest -Padbmirror.device=<serial>  # 실기기 통합 테스트
+ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 수 출력
 ```
 
 ## 구조

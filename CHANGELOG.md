@@ -7,6 +7,9 @@
 ### 추가
 - Desktop adb 전송(`AdbBinaryTransport`): adb 탐색(설정 → PATH → ANDROID_HOME → OS 기본 SDK), `track-devices` 기기 추적, localabstract 소켓 연결(forward + TCP)
 - scrcpy 서버 실행기와 미러링 세션(`ScrcpyServerLauncher`, `ScrcpyMirrorSession`), 기기·미러링 Repository 구현
+- Desktop KMP 앱 미러링: 기기 목록에서 기기를 골라 연결하면 FFmpeg(LGPL)로 디코딩해 표시, 클릭·드래그 터치, 보기 전용 토글, 연결 끊기
+  - 스크롤 중 약 60fps. CPU는 Swift 프로토타입(하드웨어 디코딩)보다 높아 #41에서 하드웨어 디코딩 적용 예정
+- `MirrorViewModel`(Intent → UseCase → Reducer), 창을 닫거나 종료 신호로 끝나도 서버·forward 정리
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30
