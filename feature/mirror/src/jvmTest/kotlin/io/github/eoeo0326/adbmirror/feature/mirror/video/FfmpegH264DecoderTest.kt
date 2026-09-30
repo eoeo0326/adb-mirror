@@ -50,4 +50,45 @@ class FfmpegH264DecoderTest {
         assertEquals(listOf(340 to 720, 720 to 340, 340 to 720), sizes.distinct().let { d -> sizes.fold(mutableListOf<Pair<Int, Int>>()) { acc, s -> if (acc.lastOrNull() != s) acc += s; acc } })
         assertTrue(nonBlack > sizes.size * 0.9, "검지 않은 프레임 $nonBlack / ${sizes.size}")
     }
+
+    /** 20번째 프레임을 디코딩해 (크기, BGRA)를 돌려준다. */
+    private fun frame20(hardware: Boolean): Triple<Int, Int, ByteArray> = runBlocking {
+        val dir = File(System.getProperty("fixtures.dir")!!)
+        val parser = VideoStreamParser(ByteArraySource(File(dir, "scrcpy-v4.1-h264-rotate.bin").readBytes()))
+        parser.readHeader()
+        var n = 0
+        var result: Triple<Int, Int, ByteArray>? = null
+        FfmpegH264Decoder(hardware).use { decoder ->
+            while (result == null) {
+                val item = parser.readItem() as? VideoStreamParser.Item.Packet ?: continue
+                decoder.decode(item.packet.data) { w, h, bgra -> if (++n == 20) result = Triple(w, h, bgra.copyOf()) }
+            }
+        }
+        result!!
+    }
+
+    /**
+     * 하드웨어 디코더(없으면 소프트웨어로 되돌아감)와 소프트웨어 디코더가 같은 화면을 낸다.
+     * fixture 너비 340은 16의 배수가 아니라, 변환 너비를 늘렸다가 원래 너비만 복사하는 경로도 함께 확인한다.
+     */
+    @Test
+    fun hardwareAndSoftwareDecodeMatch() {
+        val (hw, hh, hwBgra) = frame20(hardware = true)
+        val (sw, sh, swBgra) = frame20(hardware = false)
+        assertEquals(sw to sh, hw to hh)
+        assertEquals(340 to 720, sw to sh)
+        // 색 변환 반올림 차이만 허용: 채널 평균 차이 2 이하
+        var diff = 0L
+        for (i in swBgra.indices) diff += kotlin.math.abs((hwBgra[i].toInt() and 0xFF) - (swBgra[i].toInt() and 0xFF))
+        val mean = diff.toDouble() / swBgra.size
+        assertTrue(mean <= 2.0, "평균 채널 차이 $mean")
+        // 오른쪽 끝 열이 늘린 너비의 쓰레기가 아니라 옆 열과 비슷해야 한다(줄 밀림 없음)
+        var edge = 0L
+        for (y in 0 until sh) {
+            val last = (y * sw + sw - 1) * 4
+            val prev = last - 4
+            for (c in 0 until 3) edge += kotlin.math.abs((swBgra[last + c].toInt() and 0xFF) - (swBgra[prev + c].toInt() and 0xFF))
+        }
+        assertTrue(edge.toDouble() / (sh * 3) < 20.0, "오른쪽 끝 열 차이 ${edge.toDouble() / (sh * 3)}")
+    }
 }

@@ -40,7 +40,8 @@ actual fun VideoSurface(
     // FFmpeg 디코더는 전용 스레드 하나에서만 쓴다. 세션이 바뀌거나 화면을 떠나면(취소) 그 스레드에서 닫는다.
     LaunchedEffect(session) {
         val stats = if (System.getenv("ADB_MIRROR_STATS") == "1") FpsLogger() else null
-        decodeOnDedicatedThread(session.packets, ::FfmpegH264Decoder) { w, h, bgra ->
+        val newDecoder = { FfmpegH264Decoder().also { if (stats != null) println("decoder=${it.backend}") } }
+        decodeOnDedicatedThread(session.packets, newDecoder) { w, h, bgra ->
             store.publish(w, h, bgra)
             stats?.frame()
         }

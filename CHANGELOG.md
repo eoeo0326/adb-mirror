@@ -24,6 +24,7 @@
 - 포터블 배포본(Windows zip·Linux tar.gz, `portable` 표식 포함)과 `packageDistributions` 작업: 설치 파일·포터블을 `build/release/`에 `ADB-Mirror-<버전>-<os>-<arch>` 이름으로 모음
 - GitHub Actions: 테스트, macOS arm64·x64 / Windows x64 / Linux x64·arm64 패키지 빌드와 포터블 구조 확인, `v*` 태그 시 Release 업로드와 SHA256SUMS. macOS 서명·공증은 Secrets가 있을 때만
 - 창 위치 기억: 기기 목록 창은 위치·크기, 미러링 창은 기기별 위치를 `windows.properties`에 저장해 다음 실행 때 복원(모니터 배치가 바뀌어 잡을 수 없는 위치면 기본 위치)
+- 하드웨어 디코딩: macOS VideoToolbox·Windows D3D11VA/DXVA2·Linux VAAPI를 먼저 쓰고 없으면 소프트웨어. 색 변환 너비를 16의 배수로 맞춰 SIMD 경로를 씀. 스크롤 중 CPU 약 30% → 25%(`ADB_MIRROR_HWDECODE=0`으로 끌 수 있음)
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30
