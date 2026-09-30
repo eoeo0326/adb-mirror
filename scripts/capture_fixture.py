@@ -105,20 +105,22 @@ def main():
 
     serial = args.serial
     scid = f"{random.randrange(1 << 31):08x}"
+    # 기기 설정은 무엇이든 띄우기 전에 읽어 둔다. 여기서 실패하면 정리할 것이 아직 없다.
+    saved = ({k: adb(serial, "shell", "settings", "get", "system", k)
+              for k in ("accelerometer_rotation", "user_rotation")} if args.rotate else {})
     adb(serial, "push", SERVER_JAR, DEVICE_PATH)
-    port = int(adb(serial, "forward", "tcp:0", f"localabstract:scrcpy_{scid}"))
-    server = subprocess.Popen(
-        ["adb", "-s", serial, "shell", f"CLASSPATH={DEVICE_PATH}", "app_process", "/",
-         "com.genymobile.scrcpy.Server", SERVER_VERSION, f"scid={scid}", "tunnel_forward=true",
-         "video=true", "audio=false", "control=false", "video_codec=h264",
-         f"max_size={args.max_size}", "max_fps=30", "cleanup=true", "log_level=warn"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-    saved = {k: adb(serial, "shell", "settings", "get", "system", k)
-             for k in ("accelerometer_rotation", "user_rotation")}
     out_dir = os.path.join(ROOT, "fixtures")
     shots = []
+    port = None
+    server = None
     try:
+        port = int(adb(serial, "forward", "tcp:0", f"localabstract:scrcpy_{scid}"))
+        server = subprocess.Popen(
+            ["adb", "-s", serial, "shell", f"CLASSPATH={DEVICE_PATH}", "app_process", "/",
+             "com.genymobile.scrcpy.Server", SERVER_VERSION, f"scid={scid}", "tunnel_forward=true",
+             "video=true", "audio=false", "control=false", "video_codec=h264",
+             f"max_size={args.max_size}", "max_fps=30", "cleanup=true", "log_level=warn"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         sock = None
         for _ in range(100):  # forward 터널은 listen 전에도 connect 가 되므로 dummy byte 로 확인
             s = socket.create_connection(("127.0.0.1", port))
@@ -167,9 +169,15 @@ def main():
         t.join(2)
     finally:
         for k, v in saved.items():
-            adb(serial, "shell", "settings", "put", "system", k, v, check=False)
-        server.terminate()
-        adb(serial, "forward", "--remove", f"tcp:{port}", check=False)
+            # 원래 값이 없던 설정(`null`)은 값을 써 넣지 않고 지워서 되돌린다.
+            if v in ("", "null"):
+                adb(serial, "shell", "settings", "delete", "system", k, check=False)
+            else:
+                adb(serial, "shell", "settings", "put", "system", k, v, check=False)
+        if server is not None:
+            server.terminate()
+        if port is not None:
+            adb(serial, "forward", "--remove", f"tcp:{port}", check=False)
 
     data = b"".join(chunks)
     bin_path = os.path.join(out_dir, f"{args.name}.bin")
