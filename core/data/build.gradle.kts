@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.android.kmp.library)
 }
 
+val javacppPlatform: String by rootProject.extra
+
 kotlin {
     jvmToolchain(21)
     jvm()
@@ -26,6 +28,12 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
+        }
+        jvmMain.dependencies {
+            // 녹화 파일 디코딩(avformat·avcodec)과 WebP 프레임 인코딩(libwebp). 빌드하는 OS 것만 넣는다.
+            implementation(libs.bytedeco.ffmpeg)
+            implementation("org.bytedeco:ffmpeg:${libs.versions.bytedeco.ffmpeg.get()}:$javacppPlatform")
+            implementation("org.bytedeco:javacpp:${libs.versions.bytedeco.javacpp.get()}:$javacppPlatform")
         }
     }
 }

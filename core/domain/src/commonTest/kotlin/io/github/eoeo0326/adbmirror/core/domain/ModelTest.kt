@@ -24,4 +24,20 @@ class ModelTest {
     fun videoSizeMustBePositive() {
         assertFailsWith<IllegalArgumentException> { VideoSize(0, 720) }
     }
+
+    @Test
+    fun outputSizeKeepsAspectAndNeverUpscales() {
+        val info = io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo(10_000, 606, 1280)
+        assertEquals(480 to 1013, ConversionOptions(width = 480).outputSize(info))
+        assertEquals(606 to 1280, ConversionOptions(width = 1080).outputSize(info))
+    }
+
+    @Test
+    fun estimatedBytesGrowsWithFpsAndDuration() {
+        val info = io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo(10_000, 606, 1280)
+        val base = ConversionOptions(width = 480, fps = 10).estimatedBytes(info)
+        assertEquals(base * 2, ConversionOptions(width = 480, fps = 20).estimatedBytes(info))
+        assertEquals(base / 2, ConversionOptions(width = 480, fps = 10, endMs = 5_000).estimatedBytes(info))
+        assertTrue(ConversionOptions(format = io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat.WebP, width = 480, fps = 10).estimatedBytes(info) < base)
+    }
 }
