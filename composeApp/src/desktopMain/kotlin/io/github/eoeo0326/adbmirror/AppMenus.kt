@@ -19,7 +19,7 @@ internal fun shortcut(key: Key) = KeyShortcut(key, meta = isMac, ctrl = !isMac)
  * macOS의 종료(⌘Q)는 앱 메뉴가 맡으므로 파일 메뉴에는 Windows·Linux에서만 둔다.
  */
 @Composable
-fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: () -> Unit, onQuit: () -> Unit) {
+fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: () -> Unit, onOpenSettings: () -> Unit, onQuit: () -> Unit) {
     val state by holder.viewModel.state.collectAsState()
     val session by holder.viewModel.session.collectAsState()
     val send = holder.viewModel::onIntent
@@ -29,7 +29,11 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
             Item("스크린샷 저장", shortcut = shortcut(Key.S), enabled = !state.capturingScreenshot) { send(MirrorIntent.SaveScreenshot) }
             Separator()
             Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)
-            if (!isMac) Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
+            if (!isMac) {
+                Separator()
+                Item("설정…", shortcut = shortcut(Key.Comma), onClick = onOpenSettings)
+                Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
+            }
         }
         Menu("보기") {
             CheckboxItem("보기 전용", checked = state.settings.viewOnly) { send(MirrorIntent.ToggleViewOnly) }
@@ -43,12 +47,13 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
     }
 }
 
-/** 기기 목록 창 메뉴 막대. macOS는 앱 메뉴에 종료가 있어 따로 두지 않는다. */
+/** 기기 목록 창 메뉴 막대. macOS는 앱 메뉴에 설정(⌘,)·종료가 있어 따로 두지 않는다. */
 @Composable
-fun FrameWindowScope.DeviceListMenuBar(onQuit: () -> Unit) {
+fun FrameWindowScope.DeviceListMenuBar(onOpenSettings: () -> Unit, onQuit: () -> Unit) {
     if (isMac) return
     MenuBar {
         Menu("파일") {
+            Item("설정…", shortcut = shortcut(Key.Comma), onClick = onOpenSettings)
             Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
         }
     }

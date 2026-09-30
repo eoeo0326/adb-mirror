@@ -15,6 +15,9 @@
 - 기기에 터치 표시(show_touches): 켜면 연결된 동안 기기 설정을 켜고, 끄기·연결 끊김·창 닫기에서 원래 값으로 복원
 - 스크린샷: 기기 원본 해상도(`screencap`)로 클립보드 복사·파일 저장(기본 바탕화면, `adb-mirror_<serial>_<시각>.png`), 결과는 창 아래 알림으로 표시
 - Desktop 메뉴 막대와 단축키(macOS ⌘ / Windows·Linux Ctrl): 스크린샷 복사 C·저장 S, 창 닫기 W, 종료 Q, 보기 토글, 연결 끊기·다시 연결. macOS는 화면 위 메뉴 막대에 붙고 앱 메뉴 종료도 세션을 정리
+- 설정 저장(`settings.properties`)과 설정 창(macOS ⌘, · Windows·Linux 파일 > 설정…): 해상도·fps·보기 토글·저장 폴더·adb 경로
+  - 설치형은 OS 표준 위치, 실행 파일 옆에 `portable` 파일이 있으면 `data/`(포터블)
+  - adb를 못 찾으면 첫 창에서 adb 위치를 지정할 수 있음
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30

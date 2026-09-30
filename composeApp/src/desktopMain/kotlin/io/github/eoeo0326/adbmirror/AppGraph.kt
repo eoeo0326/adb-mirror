@@ -7,8 +7,8 @@ import io.github.eoeo0326.adbmirror.core.data.scrcpy.ClasspathServerJarSource
 import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
-import io.github.eoeo0326.adbmirror.core.data.settings.InMemorySettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
@@ -21,17 +21,19 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
+import io.github.eoeo0326.adbmirror.feature.settings.SettingsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 /** 수동 DI. 화면·UseCase가 더 늘면 Koin으로 옮긴다. */
-class AppGraph(transport: AdbBinaryTransport) {
+class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepository) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val settings = InMemorySettingsRepository()
     private val devices = DeviceRepositoryImpl(transport)
     private val screenshots = ScreenshotRepositoryImpl(transport, DesktopScreenshotSink())
     private val mirror = MirrorRepositoryImpl(ScrcpyServerLauncher(transport, ClasspathServerJarSource, log = ::println), scope)
+
+    fun settingsViewModel() = SettingsViewModel(GetSettingsUseCase(settings), UpdateSettingsUseCase(settings))
 
     fun deviceListViewModel() = DeviceListViewModel(GetDevicesUseCase(devices))
 
