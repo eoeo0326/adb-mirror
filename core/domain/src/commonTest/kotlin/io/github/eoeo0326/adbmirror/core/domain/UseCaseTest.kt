@@ -18,6 +18,8 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.StartRecordingUseCase
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
+import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -102,7 +104,7 @@ class UseCaseTest {
     fun convertRejectsInvalidOptions() {
         val useCase = ConvertRecordingUseCase(FakeRecordingRepository(FakeSession()))
         val error = assertFailsWith<IllegalArgumentException> {
-            useCase("a.mp4", ConversionOptions(fps = 60, startMs = 500, endMs = 100))
+            useCase(listOf("a.mp4"), ConversionOptions(fps = 60, startMs = 500, endMs = 100))
         }
         assertTrue("fps" in error.message!!)
         assertTrue("끝 시각" in error.message!!)
@@ -111,8 +113,15 @@ class UseCaseTest {
     @Test
     fun convertPassesValidOptions() = runTest {
         val useCase = ConvertRecordingUseCase(FakeRecordingRepository(FakeSession()))
-        val result = useCase("a.mp4", ConversionOptions()).toList()
+        val result = useCase(listOf("a.mp4"), ConversionOptions()).toList()
         assertEquals(listOf(ConversionProgress.Done("a.mp4.gif")), result)
+    }
+
+    @Test
+    fun videoInfoOfPartsIsJoined() = runTest {
+        val info = GetVideoInfoUseCase(FakeRecordingRepository(FakeSession()))(listOf("a.mp4", "a_part2.mp4"))
+        assertEquals(VideoInfo(20_000, 606, 1280), info)
+        assertFailsWith<IllegalArgumentException> { ConvertRecordingUseCase(FakeRecordingRepository(FakeSession()))(emptyList(), ConversionOptions()) }
     }
 
     @Test

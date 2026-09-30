@@ -45,11 +45,16 @@ fun ConversionPanel(draft: ConversionDraft, conversion: ConversionState, onInten
         ) {
             Text("GIF·WebP로 변환", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(
-                draft.file.substringAfterLast('/').substringAfterLast('\\') + " · ${draft.info.width}×${draft.info.height} · ${seconds(draft.info.durationMs)}",
+                draft.files.first().substringAfterLast('/').substringAfterLast('\\') +
+                    (if (draft.files.size > 1) " 외 part ${draft.files.size - 1}개" else "") +
+                    " · ${draft.info.width}×${draft.info.height} · ${seconds(draft.info.durationMs)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            if (draft.files.size > 1) {
+                Note("회전으로 나뉜 part ${draft.files.size}개를 이어서 하나로 만듭니다. 방향이 다른 part는 첫 part 크기 안에 맞추고 남는 곳은 검정으로 채웁니다.")
+            }
             Label("형식")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AnimatedFormat.entries.forEach { f ->

@@ -37,7 +37,7 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
                 Item("녹화 정지", shortcut = shortcut(Key.R), enabled = rec is RecordingState.Recording) { send(MirrorIntent.StopRecording) }
             }
             Item("녹화 파일 변환…", enabled = state.conversion !is ConversionState.Converting) {
-                pickFile("변환할 녹화 파일(MP4) 선택")?.let { send(MirrorIntent.OpenConversion(it)) }
+                pickFile("변환할 녹화 파일(MP4) 선택")?.let { send(MirrorIntent.OpenConversion(recordingParts(it))) }
             }
             Separator()
             Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)
@@ -69,4 +69,18 @@ fun FrameWindowScope.DeviceListMenuBar(onOpenSettings: () -> Unit, onQuit: () ->
             Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
         }
     }
+}
+
+/**
+ * 고른 녹화 파일이 회전으로 나뉜 녹화의 한 part면(`이름.mp4`, `이름_part2.mp4` …) 같은 녹화의 part를 순서대로 모두 돌려준다.
+ * part가 아니면 그 파일만.
+ */
+internal fun recordingParts(path: String): List<String> {
+    val file = java.io.File(path)
+    val base = file.name.removeSuffix(".mp4").replace(Regex("_part\\d+$"), "")
+    val dir = file.absoluteFile.parentFile ?: return listOf(path)
+    val first = java.io.File(dir, "$base.mp4")
+    if (!first.isFile) return listOf(path)
+    val parts = generateSequence(2) { it + 1 }.map { java.io.File(dir, "${base}_part$it.mp4") }.takeWhile { it.isFile }.toList()
+    return (listOf(first) + parts).map { it.absolutePath }
 }

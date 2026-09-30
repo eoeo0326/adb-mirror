@@ -72,6 +72,6 @@ class FakeRecordingRepository(private val session: FakeSession) : RecordingRepos
     }
     override suspend fun info(file: String) = VideoInfo(10_000, 606, 1280)
     override fun supportedFormats() = AnimatedFormat.entries.toSet()
-    override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> =
-        flowOf(ConversionProgress.Done("$file.${options.format.name.lowercase()}"))
+    override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> =
+        flowOf(ConversionProgress.Done("${files.first()}.${options.format.name.lowercase()}"))
 }

@@ -60,15 +60,16 @@ class GetConversionFormatsUseCase(private val recordings: RecordingRepository) {
     operator fun invoke(): Set<AnimatedFormat> = recordings.supportedFormats()
 }
 
+/** 파일(들)의 정보. 여러 part면 이어 붙인 정보([VideoInfo.joined]). */
 class GetVideoInfoUseCase(private val recordings: RecordingRepository) {
-    suspend operator fun invoke(file: String): VideoInfo = recordings.info(file)
+    suspend operator fun invoke(files: List<String>): VideoInfo = VideoInfo.joined(files.map { recordings.info(it) })
 }
 
 /** 옵션이 허용 범위를 벗어나면 변환을 시작하지 않고 [IllegalArgumentException]을 던진다. */
 class ConvertRecordingUseCase(private val recordings: RecordingRepository) {
-    operator fun invoke(file: String, options: ConversionOptions): Flow<ConversionProgress> {
-        val problems = options.problems()
+    operator fun invoke(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> {
+        val problems = options.problems() + listOfNotNull("변환할 파일이 없습니다".takeIf { files.isEmpty() })
         require(problems.isEmpty()) { problems.joinToString() }
-        return recordings.convert(file, options)
+        return recordings.convert(files, options)
     }
 }

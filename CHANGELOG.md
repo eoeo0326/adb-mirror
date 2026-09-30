@@ -26,6 +26,7 @@
 - 창 위치 기억: 기기 목록 창은 위치·크기, 미러링 창은 기기별 위치를 `windows.properties`에 저장해 다음 실행 때 복원(모니터 배치가 바뀌어 잡을 수 없는 위치면 기본 위치)
 - 하드웨어 디코딩: macOS VideoToolbox·Windows D3D11VA/DXVA2·Linux VAAPI를 먼저 쓰고 없으면 소프트웨어. 색 변환 너비를 16의 배수로 맞춰 SIMD 경로를 씀. 스크롤 중 CPU 약 30% → 25%(`ADB_MIRROR_HWDECODE=0`으로 끌 수 있음)
 - GIF 크기 줄이기: 둘째 프레임부터 보이는 화면과 달라진 사각형만 쓰고, 디코딩 잡음(채널 차이 6 이하)은 바뀌지 않은 것으로 봄, 같은 프레임은 지연 시간만 늘림. fixture 4.4초(340px·15fps) 849KB → 482KB
+- 회전으로 나뉜 녹화 이어서 변환: part들을 한 GIF·WebP로 잇고, 방향이 다른 part는 첫 part 크기 캔버스 가운데에 맞춤(남는 곳 검정). 저장 알림·최근 녹화·파일 선택(다른 part도 자동으로 찾음) 모두 적용
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30
