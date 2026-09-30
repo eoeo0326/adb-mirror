@@ -1,0 +1,160 @@
+name: Build
+
+# PR·main 푸시: 테스트와 OS별 설치 파일·포터블 빌드.
+# v* 태그: 위에 더해 GitHub Release에 배포 파일과 SHA256SUMS를 올린다.
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: 테스트 (JVM · Web)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew allTests --continue
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: "**/build/reports/tests/"
+
+  package:
+    name: 패키지 (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64, os: macos-15 }
+          - { name: macos-x64, os: macos-15-intel }
+          - { name: windows-x64, os: windows-2025 }
+          - { name: linux-x64, os: ubuntu-24.04 }
+          - { name: linux-arm64, os: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.os }}
+    env:
+      # 단계의 if에서는 secrets를 바로 쓸 수 없어 여기서 있는지만 알린다.
+      HAS_MAC_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: rpm 도구 설치
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      # Apple 개발자 인증서가 등록돼 있을 때만 서명·공증한다. 없으면 ad-hoc 서명(우클릭 → 열기 필요).
+      - name: macOS 서명 인증서 가져오기
+        id: macsign
+        if: runner.os == 'macOS' && env.HAS_MAC_CERT == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "keychain=$keychain" >> "$GITHUB_OUTPUT"
+
+      - name: 설치 파일·포터블 빌드
+        env:
+          MAC_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEYCHAIN: ${{ steps.macsign.outputs.keychain }}
+        run: |
+          args=()
+          if [ -n "$KEYCHAIN" ]; then
+            args+=(
+              -Pcompose.desktop.mac.sign=true
+              "-Pcompose.desktop.mac.signing.identity=$MAC_IDENTITY"
+              "-Pcompose.desktop.mac.signing.keychain=$KEYCHAIN"
+              "-Pcompose.desktop.mac.notarization.appleID=$APPLE_ID"
+              "-Pcompose.desktop.mac.notarization.password=$APPLE_APP_PASSWORD"
+              "-Pcompose.desktop.mac.notarization.teamID=$APPLE_TEAM_ID"
+            )
+          fi
+          # 공증(스테이플)이 dmg를 고치므로 먼저 하고, 그 뒤에 build/release/로 모은다.
+          if [ -n "$KEYCHAIN" ]; then
+            ./gradlew :composeApp:notarizeDmg "${args[@]}"
+          fi
+          ./gradlew :composeApp:packageDistributions "${args[@]}"
+          ls -la composeApp/build/release
+
+      - name: 포터블 구조 확인
+        if: runner.os != 'macOS'
+        run: |
+          for f in composeApp/build/release/*-portable.*; do scripts/check-portable.sh "$f"; done
+
+      - name: macOS 앱 서명 확인
+        if: runner.os == 'macOS'
+        run: |
+          app="$(find composeApp/build/compose/binaries/main/app -maxdepth 1 -name '*.app' | head -1)"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E 'Signature|Authority|TeamIdentifier' || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.name }}
+          path: composeApp/build/release/*
+          if-no-files-found: error
+
+  release:
+    name: Release 업로드
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, package]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - name: SHA256SUMS
+        working-directory: dist
+        run: sha256sum * | tee SHA256SUMS
+      # 릴리즈가 이미 있으면(직접 만든 노트) 파일만 올리고, 없으면 CHANGELOG의 해당 버전 절로 만든다.
+      - name: Release에 올리기
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            version="${TAG#v}"
+            awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {if (on) exit} on' CHANGELOG.md > notes.md
+            gh release create "$TAG" dist/* --title "$TAG" --notes-file notes.md
+          fi
