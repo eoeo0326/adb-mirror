@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### 추가
+- Desktop adb 전송(`AdbBinaryTransport`): adb 탐색(설정 → PATH → ANDROID_HOME → OS 기본 SDK), `track-devices` 기기 추적, localabstract 소켓 연결(forward + TCP)
+- scrcpy 서버 실행기와 미러링 세션(`ScrcpyServerLauncher`, `ScrcpyMirrorSession`), 기기·미러링 Repository 구현
+- scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
+
 ## [0.3.0] - 2026-09-30
 
 Phase 1(공통 코드) 완료 릴리즈입니다. 사용자가 쓰는 앱은 아직 `macos-swift/`의 Swift 프로토타입이며, KMP 앱은 공통 로직만 갖춘 상태입니다.
