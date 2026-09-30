@@ -1,3 +1,6 @@
+import java.net.URI
+import java.security.MessageDigest
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kmp.library)
@@ -30,4 +33,35 @@ kotlin {
 // jvmTest의 fixture 테스트가 레포 루트의 fixtures/를 읽는다.
 tasks.withType<Test>().configureEach {
     systemProperty("fixtures.dir", rootProject.layout.projectDirectory.dir("fixtures").asFile.absolutePath)
+    systemProperty("scrcpy.version", providers.gradleProperty("scrcpy.version").get())
+    systemProperty("scrcpy.sha256", providers.gradleProperty("scrcpy.sha256").get())
+    // 실기기 통합 테스트: -Padbmirror.device=<serial>
+    systemProperty("adbmirror.device", providers.gradleProperty("adbmirror.device").getOrElse(""))
 }
+
+/** scrcpy-server를 GitHub 릴리즈에서 받아 sha256을 검증하고 JVM 리소스로 둔다. */
+abstract class FetchScrcpyServer : DefaultTask() {
+    @get:Input abstract val version: Property<String>
+    @get:Input abstract val sha256: Property<String>
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun fetch() {
+        val v = version.get()
+        val url = URI("https://github.com/Genymobile/scrcpy/releases/download/v$v/scrcpy-server-v$v").toURL()
+        val bytes = url.openStream().use { it.readBytes() }
+        val actual = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+        check(actual == sha256.get()) { "scrcpy-server sha256 불일치: expected=${sha256.get()} actual=$actual" }
+        val dir = outputDir.get().asFile.resolve("io/github/eoeo0326/adbmirror/scrcpy").apply { mkdirs() }
+        dir.resolve("scrcpy-server").writeBytes(bytes)
+        dir.resolve("scrcpy-server.properties").writeText("version=$v\n")
+    }
+}
+
+val fetchScrcpyServer = tasks.register<FetchScrcpyServer>("fetchScrcpyServer") {
+    version = providers.gradleProperty("scrcpy.version")
+    sha256 = providers.gradleProperty("scrcpy.sha256")
+    outputDir = layout.buildDirectory.dir("generated/scrcpy-server")
+}
+
+kotlin.sourceSets.getByName("jvmMain").resources.srcDir(fetchScrcpyServer)
