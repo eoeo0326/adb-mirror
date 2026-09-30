@@ -5,6 +5,7 @@
 
     <application
         android:name="io.github.eoeo0326.adbmirror.AdbMirrorApplication"
+        android:allowBackup="false"
         android:label="ADB Mirror"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
