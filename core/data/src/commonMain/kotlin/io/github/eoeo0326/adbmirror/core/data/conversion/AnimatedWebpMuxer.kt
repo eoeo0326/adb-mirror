@@ -8,7 +8,7 @@ package io.github.eoeo0326.adbmirror.core.data.conversion
 class AnimatedWebpMuxer(
     private val width: Int,
     private val height: Int,
-    /** 0이면 무한 반복 */
+    /** 재생 횟수(ANIM loop count). 0이면 무한 반복. */
     private val loopCount: Int = 0,
     /** 캔버스 배경색(ARGB). 프레임이 캔버스를 모두 덮으므로 보통 쓰이지 않는다. */
     private val backgroundArgb: Int = 0xFF000000.toInt(),
