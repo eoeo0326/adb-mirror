@@ -10,13 +10,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.feature.mirror.video.VideoSurface
+import io.github.eoeo0326.adbmirror.feature.mirror.video.touchEffect
 
 /** ViewModel에 연결된 미러링 창 내용. */
 @Composable
@@ -39,13 +46,12 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(mirroring?.deviceName ?: state.device.model ?: state.device.serial, Modifier.weight(1f), fontWeight = FontWeight.Medium)
-            Text("보기 전용", style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.width(6.dp))
-            Switch(checked = state.settings.viewOnly, onCheckedChange = { onIntent(MirrorIntent.ToggleViewOnly) })
             if (session != null) {
                 Spacer(Modifier.width(12.dp))
                 OutlinedButton(onClick = { onIntent(MirrorIntent.Disconnect) }) { Text("연결 끊기") }
             }
+            Spacer(Modifier.width(4.dp))
+            OptionsMenu(state, onIntent)
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             when (val c = state.connection) {
@@ -54,7 +60,8 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
                         session = session,
                         videoSize = c.videoSize,
                         onTouch = { action, x, y -> onIntent(MirrorIntent.Touch(action, x, y)) },
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize()
+                            .touchEffect(enabled = state.settings.touchEffect && !state.settings.viewOnly, videoSize = c.videoSize),
                     )
                 }
                 Connection.Connecting -> Text("연결 중…")
@@ -63,6 +70,29 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
             }
         }
     }
+}
+
+/** 창이 폰 폭에 맞춰 좁아지므로 토글은 툴바 대신 메뉴에 둔다. */
+@Composable
+private fun OptionsMenu(state: MirrorState, onIntent: (MirrorIntent) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { open = true }) { Text("설정") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            MenuToggle("보기 전용", state.settings.viewOnly) { onIntent(MirrorIntent.ToggleViewOnly) }
+            MenuToggle("클릭 이펙트", state.settings.touchEffect) { onIntent(MirrorIntent.ToggleTouchEffect) }
+            MenuToggle("기기에 터치 표시", state.settings.showTouches) { onIntent(MirrorIntent.ToggleShowTouches) }
+        }
+    }
+}
+
+@Composable
+private fun MenuToggle(label: String, checked: Boolean, onToggle: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label, style = MaterialTheme.typography.bodyMedium) },
+        leadingIcon = { Checkbox(checked = checked, onCheckedChange = null) },
+        onClick = onToggle,
+    )
 }
 
 @Composable
