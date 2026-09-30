@@ -15,7 +15,11 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.imageio.ImageIO
 
-/** AWT 클립보드와 파일 시스템으로 내보낸다. 기본 저장 위치는 바탕화면(없으면 사진, 그것도 없으면 홈)이다. */
+/** 스크린샷·녹화 기본 저장 위치: 바탕화면, 없으면 사진, 그것도 없으면 홈. */
+fun defaultOutputDir(home: File = File(System.getProperty("user.home"))): File =
+    listOf("Desktop", "Pictures").map { File(home, it) }.firstOrNull { it.isDirectory } ?: home
+
+/** AWT 클립보드와 파일 시스템으로 내보낸다. 기본 저장 위치는 [defaultOutputDir]. */
 class DesktopScreenshotSink(
     private val home: File = File(System.getProperty("user.home")),
     private val now: () -> LocalDateTime = LocalDateTime::now,
@@ -41,8 +45,7 @@ class DesktopScreenshotSink(
         error("${folder.path}에 같은 시각의 파일이 너무 많습니다")
     }
 
-    fun defaultDir(): File =
-        listOf("Desktop", "Pictures").map { File(home, it) }.firstOrNull { it.isDirectory } ?: home
+    fun defaultDir(): File = defaultOutputDir(home)
 
     private class ImageSelection(private val image: Image) : Transferable {
         override fun getTransferDataFlavors() = arrayOf(DataFlavor.imageFlavor)

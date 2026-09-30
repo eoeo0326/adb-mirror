@@ -60,7 +60,7 @@ class FakeRecordingRepository(private val session: FakeSession) : RecordingRepos
         this.session.log += "recordStart"
         startedDir = outputDir
     }
-    override suspend fun stop(): Recording? = null
+    override suspend fun stop(serial: String): Recording? = null
     override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> =
         flowOf(ConversionProgress.Done("$file.${options.format.name.lowercase()}"))
 }

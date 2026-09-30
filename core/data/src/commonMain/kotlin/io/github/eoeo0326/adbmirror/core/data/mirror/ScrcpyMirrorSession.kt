@@ -8,6 +8,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -81,20 +82,26 @@ class ScrcpyMirrorSession(
         if (header.codecId != VideoStreamParser.CODEC_H264) error("지원하지 않는 코덱: 0x${header.codecId.toString(16)}")
         _events.emit(SessionEvent.DeviceName(header.deviceName))
         var firstPacketDelivered = false
+        var size: VideoSize? = null
         while (true) {
             when (val item = parser.readItem()) {
                 is VideoStreamParser.Item.Session -> {
                     captureStarted.complete(Unit)
+                    size = item.size
                     _events.emit(SessionEvent.VideoSizeChanged(item.size))
                 }
                 is VideoStreamParser.Item.Packet -> {
+                    // 녹화는 config마다 크기를 보고 파일을 나누므로, 같은 흐름 안에서 크기를 함께 싣는다.
+                    val packet = item.packet.let { p ->
+                        if (p.kind == EncodedPacket.Kind.Config) EncodedPacket(p.kind, p.ptsUs, p.data, size) else p
+                    }
                     if (!firstPacketDelivered) {
                         // 구독자가 붙기 전에 첫 config를 흘려 버리면 디코더가 다음 key frame까지 그리지 못한다.
                         // 첫 패킷만 구독자를 기다린다(세션 이벤트는 계속 흐르므로 requestKeyFrame이 막히지 않는다).
                         _packets.subscriptionCount.first { it > 0 }
                         firstPacketDelivered = true
                     }
-                    _packets.emit(item.packet)
+                    _packets.emit(packet)
                 }
             }
         }
