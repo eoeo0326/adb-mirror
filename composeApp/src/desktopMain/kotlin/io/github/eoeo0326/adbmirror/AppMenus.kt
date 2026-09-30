@@ -8,6 +8,7 @@ import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 import io.github.eoeo0326.adbmirror.feature.mirror.Connection
+import io.github.eoeo0326.adbmirror.feature.mirror.ConversionState
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
 import io.github.eoeo0326.adbmirror.feature.mirror.RecordingState
 
@@ -34,6 +35,9 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
                 Item("녹화 시작", shortcut = shortcut(Key.R), enabled = state.connection is Connection.Mirroring) { send(MirrorIntent.StartRecording) }
             } else {
                 Item("녹화 정지", shortcut = shortcut(Key.R), enabled = rec is RecordingState.Recording) { send(MirrorIntent.StopRecording) }
+            }
+            Item("녹화 파일 변환…", enabled = state.conversion !is ConversionState.Converting) {
+                pickFile("변환할 녹화 파일(MP4) 선택")?.let { send(MirrorIntent.OpenConversion(it)) }
             }
             Separator()
             Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)

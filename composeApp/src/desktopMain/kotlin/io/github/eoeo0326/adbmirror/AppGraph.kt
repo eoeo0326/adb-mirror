@@ -11,9 +11,12 @@ import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.ConvertRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.GetConversionFormatsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
@@ -54,5 +57,8 @@ class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepo
         saveScreenshot = SaveScreenshotUseCase(screenshots, settings),
         startRecording = StartRecordingUseCase(recordings, settings),
         stopRecording = StopRecordingUseCase(recordings),
+        getVideoInfo = GetVideoInfoUseCase(recordings),
+        getConversionFormats = GetConversionFormatsUseCase(recordings),
+        convertRecording = ConvertRecordingUseCase(recordings),
     )
 }

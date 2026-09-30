@@ -10,13 +10,23 @@ class GifEncoderTest {
 
     @Test
     fun writesHeaderLoopAndTrailer() {
-        val gif = GifEncoder(4, 3, loopCount = 2).apply { addFrame(solid(4, 3, 0xFF112233.toInt()), 100) }.finish()
+        val gif = GifEncoder(4, 3, loopCount = 3).apply { addFrame(solid(4, 3, 0xFF112233.toInt()), 100) }.finish()
         assertEquals("GIF89a", gif.copyOfRange(0, 6).decodeToString())
         assertEquals(4, (gif[6].toInt() and 0xFF) or ((gif[7].toInt() and 0xFF) shl 8))
         assertEquals(3, (gif[8].toInt() and 0xFF) or ((gif[9].toInt() and 0xFF) shl 8))
         assertEquals("NETSCAPE2.0", gif.copyOfRange(16, 27).decodeToString())
-        assertEquals(2, (gif[29].toInt() and 0xFF) or ((gif[30].toInt() and 0xFF) shl 8))
+        assertEquals(2, (gif[29].toInt() and 0xFF) or ((gif[30].toInt() and 0xFF) shl 8)) // 3번 재생 = 처음 + 2번 반복
         assertEquals(0x3B, gif.last().toInt())
+    }
+
+    @Test
+    fun playOnceHasNoLoopExtensionAndInfiniteIsZero() {
+        val once = GifEncoder(1, 1, loopCount = 1).apply { addFrame(solid(1, 1, 0xFF000000.toInt()), 100) }.finish()
+        assertEquals(0x21, once[13].toInt() and 0xFF)
+        assertEquals(0xF9, once[14].toInt() and 0xFF) // 곧바로 그래픽 제어 확장
+        val forever = GifEncoder(1, 1, loopCount = 0).apply { addFrame(solid(1, 1, 0xFF000000.toInt()), 100) }.finish()
+        assertEquals("NETSCAPE2.0", forever.copyOfRange(16, 27).decodeToString())
+        assertEquals(0, (forever[29].toInt() and 0xFF) or ((forever[30].toInt() and 0xFF) shl 8))
     }
 
     @Test

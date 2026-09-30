@@ -1,5 +1,6 @@
 package io.github.eoeo0326.adbmirror.core.domain.usecase
 
+import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
@@ -53,6 +54,10 @@ class StartRecordingUseCase(
 
 class StopRecordingUseCase(private val recordings: RecordingRepository) {
     suspend operator fun invoke(session: MirrorSession): Recording? = recordings.stop(session.serial)
+}
+
+class GetConversionFormatsUseCase(private val recordings: RecordingRepository) {
+    operator fun invoke(): Set<AnimatedFormat> = recordings.supportedFormats()
 }
 
 class GetVideoInfoUseCase(private val recordings: RecordingRepository) {

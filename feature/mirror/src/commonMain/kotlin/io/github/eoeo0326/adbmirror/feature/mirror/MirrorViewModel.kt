@@ -2,14 +2,19 @@ package io.github.eoeo0326.adbmirror.feature.mirror
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
+import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.ConvertRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.GetConversionFormatsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
@@ -54,6 +59,9 @@ class MirrorViewModel(
     private val saveScreenshot: SaveScreenshotUseCase,
     private val startRecording: StartRecordingUseCase,
     private val stopRecording: StopRecordingUseCase,
+    private val getVideoInfo: GetVideoInfoUseCase,
+    private val getConversionFormats: GetConversionFormatsUseCase,
+    private val convertRecording: ConvertRecordingUseCase,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MirrorState(device))
     val state: StateFlow<MirrorState> = _state.asStateFlow()
@@ -78,6 +86,7 @@ class MirrorViewModel(
     /** 녹화 시작·정지를 한 줄로 세운다. 시작하는 도중 세션이 끝나도 시작이 끝난 뒤에 정지해 녹화가 남지 않게 한다. */
     private val recordingLock = Mutex()
     private val clock = TimeSource.Monotonic.markNow()
+    private var conversionJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -102,7 +111,14 @@ class MirrorViewModel(
             MirrorIntent.StartRecording -> beginRecording()
             MirrorIntent.StopRecording -> endRecording()
             MirrorIntent.ToggleShowTouches -> viewModelScope.launch { updateSettings { it.copy(showTouches = !it.showTouches) } }
-            else -> _effects.trySend(MirrorEffect.ShowMessage("아직 준비 중인 기능입니다"))
+            is MirrorIntent.OpenConversion -> openConversion(intent.file)
+            is MirrorIntent.ChangeConversionOptions -> reduce(MirrorResult.ConversionOptionsChanged(intent.options))
+            MirrorIntent.Convert -> convert()
+            MirrorIntent.CancelConversion -> cancelConversion()
+            MirrorIntent.CloseConversion -> {
+                cancelConversion()
+                reduce(MirrorResult.ConversionClosed)
+            }
         }
     }
 
@@ -214,9 +230,59 @@ class MirrorViewModel(
             return
         } ?: return
         reduce(MirrorResult.RecordingStopped)
+        if (recording.files.isNotEmpty()) reduce(MirrorResult.RecordingSaved(recording.files))
         _effects.trySend(
             if (recording.files.isEmpty()) MirrorEffect.ShowMessage("녹화된 화면이 없어 파일을 만들지 않았습니다") else MirrorEffect.RecordingSaved(recording.files),
         )
+    }
+
+    private fun openConversion(file: String) {
+        if (_state.value.conversion is ConversionState.Converting) return
+        viewModelScope.launch {
+            try {
+                val info = getVideoInfo(file)
+                val formats = getConversionFormats()
+                val options = ConversionOptions(width = minOf(ConversionOptions().width, info.width))
+                reduce(MirrorResult.ConversionOpened(ConversionDraft(file, info, options, formats)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _effects.trySend(MirrorEffect.Error("녹화 파일을 읽지 못했습니다: ${e.message ?: e::class.simpleName}"))
+            }
+        }
+    }
+
+    private fun convert() {
+        val draft = _state.value.conversionDraft ?: return
+        if (_state.value.conversion is ConversionState.Converting || draft.problems.isNotEmpty()) return
+        reduce(MirrorResult.ConversionProgressed(0f))
+        conversionJob = viewModelScope.launch {
+            try {
+                convertRecording(draft.file, draft.options).collect { progress ->
+                    when (progress) {
+                        is ConversionProgress.Running -> reduce(MirrorResult.ConversionProgressed(progress.fraction))
+                        is ConversionProgress.Done -> {
+                            reduce(MirrorResult.ConversionFinished(progress.file))
+                            _effects.trySend(MirrorEffect.ConversionDone(progress.file))
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                reduce(MirrorResult.ConversionFailed(e.message ?: e::class.simpleName ?: "변환에 실패했습니다"))
+            }
+        }
+    }
+
+    /** 흐름을 취소하면 저장소가 쓰던 파일을 지운다. */
+    private fun cancelConversion() {
+        val job = conversionJob ?: return
+        conversionJob = null
+        if (job.isActive) {
+            job.cancel()
+            reduce(MirrorResult.ConversionCancelled)
+        }
     }
 
     private fun touch(intent: MirrorIntent.Touch) {
@@ -231,6 +297,7 @@ class MirrorViewModel(
      */
     suspend fun shutdown() = withContext(NonCancellable) {
         shuttingDown = true
+        conversionJob?.cancel()
         pendingStart?.await()
         _session.value?.let {
             finishRecording(it)

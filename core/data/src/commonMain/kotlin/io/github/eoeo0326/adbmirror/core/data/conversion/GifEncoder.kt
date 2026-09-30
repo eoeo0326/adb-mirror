@@ -8,7 +8,7 @@ package io.github.eoeo0326.adbmirror.core.data.conversion
 class GifEncoder(
     private val width: Int,
     private val height: Int,
-    /** 0이면 무한 반복 */
+    /** 재생 횟수. 0이면 무한 반복. WebP([AnimatedWebpMuxer])와 뜻이 같다. */
     private val loopCount: Int = 0,
     private val dither: Boolean = false,
 ) {
@@ -23,9 +23,11 @@ class GifEncoder(
         out.u16le(width); out.u16le(height)
         out.u8(0x70) // 전역 팔레트 없음, color resolution 8비트
         out.u8(0); out.u8(0) // background, aspect
-        // NETSCAPE2.0 반복 확장
-        out.u8(0x21); out.u8(0xFF); out.u8(11); out.ascii("NETSCAPE2.0")
-        out.u8(3); out.u8(1); out.u16le(loopCount); out.u8(0)
+        // NETSCAPE2.0 반복 확장: 값은 첫 재생 뒤 더 반복할 횟수(0이면 무한). 한 번만 재생하면 확장을 넣지 않는다.
+        if (loopCount != 1) {
+            out.u8(0x21); out.u8(0xFF); out.u8(11); out.ascii("NETSCAPE2.0")
+            out.u8(3); out.u8(1); out.u16le(if (loopCount == 0) 0 else loopCount - 1); out.u8(0)
+        }
     }
 
     fun addFrame(frame: RgbaFrame, delayMs: Int) {

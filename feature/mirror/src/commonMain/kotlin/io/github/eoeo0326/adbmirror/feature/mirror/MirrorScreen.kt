@@ -16,8 +16,10 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,10 +49,18 @@ fun MirrorRoute(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
     val session by viewModel.session.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(viewModel) {
-        viewModel.effects.collect { effect -> effect.message()?.let { snackbar.showSnackbar(it) } }
+        viewModel.effects.collect { effect ->
+            val message = effect.message() ?: return@collect
+            // 녹화를 저장하면 바로 변환할 수 있게 한다.
+            val action = if (effect is MirrorEffect.RecordingSaved) "변환…" else null
+            if (snackbar.showSnackbar(message, actionLabel = action, duration = SnackbarDuration.Short) == SnackbarResult.ActionPerformed) {
+                (effect as? MirrorEffect.RecordingSaved)?.let { viewModel.onIntent(MirrorIntent.OpenConversion(it.files.first())) }
+            }
+        }
     }
     Box(modifier) {
         MirrorScreen(state, session, viewModel::onIntent)
+        state.conversionDraft?.let { ConversionPanel(it, state.conversion, viewModel::onIntent) }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp))
     }
 }
@@ -120,6 +130,11 @@ private fun OptionsMenu(state: MirrorState, onIntent: (MirrorIntent) -> Unit) {
                 text = { Text(if (rec is RecordingState.Idle) "녹화 시작" else "녹화 정지", style = MaterialTheme.typography.bodyMedium) },
                 enabled = (rec is RecordingState.Idle && state.connection is Connection.Mirroring) || rec is RecordingState.Recording,
                 onClick = { open = false; onIntent(if (rec is RecordingState.Idle) MirrorIntent.StartRecording else MirrorIntent.StopRecording) },
+            )
+            DropdownMenuItem(
+                text = { Text("최근 녹화 변환…", style = MaterialTheme.typography.bodyMedium) },
+                enabled = state.lastRecording.isNotEmpty(),
+                onClick = { open = false; onIntent(MirrorIntent.OpenConversion(state.lastRecording.first())) },
             )
             HorizontalDivider()
             MenuToggle("보기 전용", state.settings.viewOnly) { onIntent(MirrorIntent.ToggleViewOnly) }

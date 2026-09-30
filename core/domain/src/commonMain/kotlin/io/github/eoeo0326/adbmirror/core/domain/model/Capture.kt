@@ -18,7 +18,7 @@ data class ConversionOptions(
     val endMs: Long? = null,
     val fps: Int = 15,
     val width: Int = 480,
-    /** 0이면 무한 반복. */
+    /** 재생 횟수. 0이면 무한 반복. */
     val loopCount: Int = 0,
     /** WebP 품질(0~100). GIF에서는 쓰지 않는다. */
     val quality: Int = 75,
@@ -42,16 +42,17 @@ data class ConversionOptions(
     }
 
     /**
-     * 대략의 출력 크기(바이트). 화면 녹화는 정지 구간이 많아 실제로는 더 작은 경우가 많다.
-     * 픽셀당 바이트는 실기기 녹화로 잰 대략값(GIF 0.5, 디더링 0.8, WebP 품질 75에서 0.08)이다.
+     * 대략의 출력 크기(바이트). 넉넉하게(크게) 잡는다.
+     * 실기기 설정 화면 스크롤 녹화(480px·15fps)가 픽셀당 GIF 0.04, WebP(품질 75) 0.013바이트였고,
+     * 영상·게임처럼 화면이 많이 바뀌는 경우를 생각해 약 2.5배로 잡았다.
      */
     fun estimatedBytes(info: VideoInfo): Long {
         val (w, h) = outputSize(info)
         val durationMs = (endMs ?: info.durationMs).coerceAtMost(info.durationMs) - startMs
         val frames = maxOf(1L, durationMs * fps / 1000)
         val perPixel = when (format) {
-            AnimatedFormat.Gif -> if (dither) 0.8 else 0.5
-            AnimatedFormat.WebP -> 0.02 + 0.12 * quality / 100.0
+            AnimatedFormat.Gif -> if (dither) 0.2 else 0.1
+            AnimatedFormat.WebP -> 0.01 + 0.04 * quality / 100.0
         }
         return (w.toLong() * h * frames * perPixel).toLong()
     }

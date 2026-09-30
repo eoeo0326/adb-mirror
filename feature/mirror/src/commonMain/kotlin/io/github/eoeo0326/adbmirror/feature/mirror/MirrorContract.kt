@@ -1,9 +1,11 @@
 package io.github.eoeo0326.adbmirror.feature.mirror
 
+import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 
 /**
@@ -16,6 +18,10 @@ data class MirrorState(
     val settings: Settings = Settings(),
     val recording: RecordingState = RecordingState.Idle,
     val conversion: ConversionState = ConversionState.Idle,
+    /** 변환 화면이 열려 있으면 그 대상과 옵션 */
+    val conversionDraft: ConversionDraft? = null,
+    /** 이 창에서 마지막으로 저장한 녹화 파일(회전으로 나뉘면 여러 개) */
+    val lastRecording: List<String> = emptyList(),
     val statusMessage: String? = null,
     /** 스크린샷을 받는 중. 연달아 눌러도 한 장씩만 받는다. */
     val capturingScreenshot: Boolean = false,
@@ -39,6 +45,18 @@ sealed interface RecordingState {
     data object Stopping : RecordingState
 }
 
+/** 변환 화면에서 고르는 중인 내용. */
+data class ConversionDraft(
+    val file: String,
+    val info: VideoInfo,
+    val options: ConversionOptions,
+    val formats: Set<AnimatedFormat>,
+) {
+    val estimatedBytes: Long get() = options.estimatedBytes(info)
+    val isLarge: Boolean get() = estimatedBytes > ConversionOptions.LARGE_OUTPUT_BYTES
+    val problems: List<String> get() = options.problems() + listOfNotNull("이 플랫폼에서는 만들 수 없는 형식입니다".takeIf { options.format !in formats })
+}
+
 sealed interface ConversionState {
     data object Idle : ConversionState
     data class Converting(val fraction: Float) : ConversionState
@@ -59,8 +77,13 @@ sealed interface MirrorIntent {
     data object SaveScreenshot : MirrorIntent
     data object StartRecording : MirrorIntent
     data object StopRecording : MirrorIntent
-    data class Convert(val file: String, val options: ConversionOptions) : MirrorIntent
+    /** 녹화 파일로 변환 화면을 연다. */
+    data class OpenConversion(val file: String) : MirrorIntent
+    data class ChangeConversionOptions(val options: ConversionOptions) : MirrorIntent
+    /** 변환 화면의 옵션으로 변환한다. */
+    data object Convert : MirrorIntent
     data object CancelConversion : MirrorIntent
+    data object CloseConversion : MirrorIntent
 }
 
 /** UseCase 실행 결과. [MirrorReducer]만 이것으로 State를 바꾼다. */
@@ -75,6 +98,10 @@ sealed interface MirrorResult {
     data class RecordingStarted(val startedAtMs: Long) : MirrorResult
     data object RecordingStopping : MirrorResult
     data object RecordingStopped : MirrorResult
+    data class RecordingSaved(val files: List<String>) : MirrorResult
+    data class ConversionOpened(val draft: ConversionDraft) : MirrorResult
+    data class ConversionOptionsChanged(val options: ConversionOptions) : MirrorResult
+    data object ConversionClosed : MirrorResult
     data class ConversionProgressed(val fraction: Float) : MirrorResult
     data class ConversionFinished(val file: String) : MirrorResult
     data class ConversionFailed(val message: String) : MirrorResult
