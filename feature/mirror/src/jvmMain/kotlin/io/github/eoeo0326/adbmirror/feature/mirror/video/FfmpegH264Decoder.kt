@@ -19,7 +19,13 @@ import org.bytedeco.javacpp.DoublePointer
  * [hardware]가 true면 OS 하드웨어 디코더(macOS VideoToolbox, Windows D3D11VA·DXVA2, Linux VAAPI)를 먼저 붙이고,
  * 없거나 열리지 않으면 소프트웨어로 디코딩한다. 하드웨어 프레임은 시스템 메모리로 옮긴 뒤 같은 변환을 거친다.
  */
-class FfmpegH264Decoder(hardware: Boolean = hardwareDecodeEnabled()) : FrameDecoder {
+class FfmpegH264Decoder internal constructor(
+    hardware: Boolean,
+    /** 디코더 열기. 테스트가 하드웨어 열기 실패를 흉내 낼 때만 바꾼다. */
+    private val openCodec: (AVCodecContext, AVCodec) -> Int,
+) : FrameDecoder {
+    constructor(hardware: Boolean = hardwareDecodeEnabled()) : this(hardware, { ctx, codec -> avcodec.avcodec_open2(ctx, codec, null as AVDictionary?) })
+
     /** [bgra]는 다음 [decode] 호출에서 덮어쓰인다. 필요하면 복사해 쓴다. */
     fun interface FrameSink {
         fun onFrame(width: Int, height: Int, bgra: ByteArray)
@@ -41,20 +47,38 @@ class FfmpegH264Decoder(hardware: Boolean = hardwareDecodeEnabled()) : FrameDeco
         private set
 
     init {
-        val codec = avcodec.avcodec_find_decoder(avcodec.AV_CODEC_ID_H264) ?: error("FFmpeg H.264 디코더가 없습니다")
-        context = avcodec.avcodec_alloc_context3(codec)
-        context.flags(context.flags() or avcodec.AV_CODEC_FLAG_LOW_DELAY)
-        context.thread_type(FF_THREAD_SLICE)
-        context.thread_count(0)
-        if (hardware) attachHardware(codec)
-        check(avcodec.avcodec_open2(context, codec, null as AVDictionary?) >= 0) { "H.264 디코더를 열지 못했습니다" }
+        val codec = avcodec.avcodec_find_decoder(avcodec.AV_CODEC_ID_H264)
+        // 하드웨어로 열리지 않으면(장치는 있지만 프로파일 미지원·드라이버 문제 등) 소프트웨어로 다시 연다.
+        val opened = codec?.let { open(it, hardware) ?: if (hardware) open(it, false) else null }
+        if (opened == null) {
+            // init에서 던지면 close()가 불리지 않으므로 이미 잡은 버퍼를 여기서 푼다.
+            releaseBuffers()
+            error(if (codec == null) "FFmpeg H.264 디코더가 없습니다" else "H.264 디코더를 열지 못했습니다")
+        }
+        context = opened
+    }
+
+    /** 새 컨텍스트를 만들어 연다. 실패하면 컨텍스트(붙인 하드웨어 장치 참조 포함)를 버리고 null. */
+    private fun open(codec: AVCodec, hardware: Boolean): AVCodecContext? {
+        val ctx = avcodec.avcodec_alloc_context3(codec) ?: return null
+        ctx.flags(ctx.flags() or avcodec.AV_CODEC_FLAG_LOW_DELAY)
+        ctx.thread_type(FF_THREAD_SLICE)
+        ctx.thread_count(0)
+        hwPixFmt = -1
+        backend = "software"
+        if (hardware) attachHardware(ctx, codec)
+        if (openCodec(ctx, codec) >= 0) return ctx
+        avcodec.avcodec_free_context(ctx)
+        hwPixFmt = -1
+        backend = "software"
+        return null
     }
 
     /**
      * 이 OS의 하드웨어 장치를 순서대로 열어 본다. 붙이면 FFmpeg 기본 get_format이 하드웨어 형식을 고른다.
      * 모두 실패하면 아무것도 하지 않는다(소프트웨어).
      */
-    private fun attachHardware(codec: AVCodec) {
+    private fun attachHardware(ctx: AVCodecContext, codec: AVCodec) {
         for (name in hardwareCandidates()) {
             val type = avutil.av_hwdevice_find_type_by_name(name)
             if (type == avutil.AV_HWDEVICE_TYPE_NONE) continue
@@ -65,7 +89,7 @@ class FfmpegH264Decoder(hardware: Boolean = hardwareDecodeEnabled()) : FrameDeco
                 ?.pix_fmt() ?: continue
             val device = AVBufferRef(null)
             if (avutil.av_hwdevice_ctx_create(device, type, null as String?, null as AVDictionary?, 0) < 0) continue
-            context.hw_device_ctx(avutil.av_buffer_ref(device))
+            ctx.hw_device_ctx(avutil.av_buffer_ref(device))
             avutil.av_buffer_unref(device)
             hwPixFmt = pixFmt
             backend = name
@@ -164,10 +188,14 @@ class FfmpegH264Decoder(hardware: Boolean = hardwareDecodeEnabled()) : FrameDeco
 
     override fun close() {
         sws?.let(swscale::sws_freeContext)
+        releaseBuffers()
+        avcodec.avcodec_free_context(context)
+    }
+
+    private fun releaseBuffers() {
         avutil.av_frame_free(bgraFrame)
         avutil.av_frame_free(swFrame)
         avutil.av_frame_free(frame)
         avcodec.av_packet_free(packet)
-        avcodec.avcodec_free_context(context)
     }
 }
