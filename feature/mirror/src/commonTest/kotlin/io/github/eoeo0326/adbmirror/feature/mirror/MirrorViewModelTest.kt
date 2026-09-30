@@ -34,6 +34,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import androidx.lifecycle.ViewModelStore
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -84,11 +85,15 @@ class MirrorViewModelTest {
     /** 기기의 show_touches 값. 사용자가 원래 켜 두었을 수도 있다. */
     private var deviceShowTouches = false
     private val showTouchesCalls = mutableListOf<Boolean>()
+    private var showTouchesGate: CompletableDeferred<Unit>? = null
     private val deviceRepo = object : DeviceRepository {
         override fun devices() = flowOf(listOf(device))
         override suspend fun setShowTouches(serial: String, enabled: Boolean): Boolean {
             showTouchesCalls += enabled
-            return deviceShowTouches.also { deviceShowTouches = enabled }
+            val previous = deviceShowTouches
+            deviceShowTouches = enabled
+            showTouchesGate?.await() // 기기에는 이미 반영됐고 응답만 늦는 상황
+            return previous
         }
     }
 
@@ -258,5 +263,20 @@ class MirrorViewModelTest {
         settings.update { it.copy(showTouches = false) }
         settings.update { it.copy(showTouches = true) }
         assertEquals(listOf(true, false), showTouchesCalls)
+    }
+
+    @Test
+    fun showTouchesIsRestoredEvenIfCancelledWhileTurningOn() = runTest {
+        val vm = viewModel()
+        val store = ViewModelStore().apply { put("mirror", vm) }
+        val gate = CompletableDeferred<Unit>().also { showTouchesGate = it }
+        vm.onIntent(MirrorIntent.ToggleShowTouches)
+        assertTrue(deviceShowTouches)
+
+        store.clear() // 켜는 응답을 받기 전에 viewModelScope가 취소됨
+        gate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+        vm.shutdown()
+        assertFalse(deviceShowTouches, "켜 둔 기기 설정을 원래 값으로 되돌려야 한다")
     }
 }

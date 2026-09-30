@@ -158,8 +158,9 @@ class MirrorViewModel(
     /**
      * 기기의 show_touches를 설정·세션 상태에 맞춘다. 켜야 하면 원래 값을 기억해 두고 켜고,
      * 아니면(설정 끔·세션 끝·창 닫힘) 기억해 둔 값으로 되돌린다. 여러 경로에서 불러도 한 번씩만 바뀐다.
+     * 기기 설정을 바꾼 뒤 원래 값을 저장하기 전에 취소되면 복원할 수 없으므로 취소되지 않게 끝까지 돈다.
      */
-    private suspend fun syncShowTouches() = showTouchesLock.withLock {
+    private suspend fun syncShowTouches() = withContext(NonCancellable) { showTouchesLock.withLock {
         val want = !shuttingDown && _session.value != null && _state.value.settings.showTouches
         val serial = _state.value.device.serial
         val original = originalShowTouches
@@ -175,7 +176,7 @@ class MirrorViewModel(
         } catch (e: Exception) {
             _effects.trySend(MirrorEffect.ShowMessage("기기 터치 표시를 바꾸지 못했습니다: ${e.message}"))
         }
-    }
+    } }
 
     private fun reduce(result: MirrorResult) = _state.update { MirrorReducer.reduce(it, result) }
 }
