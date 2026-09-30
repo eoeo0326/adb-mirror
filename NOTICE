@@ -8,3 +8,8 @@ Copyright (C) 2018 Genymobile and Copyright (C) 2018-2026 Romain Vimont,
 licensed under the Apache License, Version 2.0.
 The scrcpy-server binary is not included in this repository; scripts/fetch-server.sh
 downloads the official release and verifies its SHA-256 checksum at build time.
+
+The desktop application uses FFmpeg (https://ffmpeg.org), licensed under the
+GNU Lesser General Public License v2.1 or later, through the JavaCPP Presets
+for FFmpeg (https://github.com/bytedeco/javacpp-presets), licensed under the
+Apache License, Version 2.0. Only the LGPL builds of FFmpeg are used.
