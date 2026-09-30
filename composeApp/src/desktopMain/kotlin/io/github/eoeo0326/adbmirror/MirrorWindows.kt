@@ -26,10 +26,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 기기 하나의 미러링 창. ViewModel은 창 전용 [ViewModelStore]에 두어,
  * 창을 닫을 때 [close]가 viewModelScope까지 끝내게 한다.
  */
-class MirrorWindowHolder(val device: Device, graph: AppGraph) {
+class MirrorWindowHolder(
+    val device: Device,
+    graph: AppGraph,
+    /** 기기별로 기억한 위치에서 연다. 크기는 영상에 맞추므로 기억하지 않는다. */
+    val windowState: WindowState = WindowState(size = DpSize(420.dp, 860.dp), position = WindowPosition.PlatformDefault),
+) {
     private val store = ViewModelStore()
     val viewModel: MirrorViewModel = ViewModelProvider.create(store, viewModelFactory { initializer { graph.mirrorViewModel(device) } })[MirrorViewModel::class]
-    val windowState = WindowState(size = DpSize(420.dp, 860.dp), position = WindowPosition.PlatformDefault)
 
     /** 올릴 때마다 1씩 늘려 창을 앞으로 가져온다. */
     val focusRequest = mutableIntStateOf(0)

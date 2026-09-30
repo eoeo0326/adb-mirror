@@ -43,6 +43,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.awt.Desktop
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /** 열려 있는 미러링 창(serial → 창). */
@@ -78,13 +79,13 @@ fun main() {
         if (graph == null) {
             AdbMissingWindow(settings)
         } else {
-            DesktopApp(graph, platform)
+            DesktopApp(graph, platform, WindowBoundsStore(File(location.dir, "windows.properties")))
         }
     }
 }
 
 @Composable
-private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatform) {
+private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatform, windowBounds: WindowBoundsStore) {
     val listViewModel = remember { graph.deviceListViewModel() }
     val settingsViewModel = remember { graph.settingsViewModel() }
     var settingsOpen by remember { mutableStateOf(false) }
@@ -105,7 +106,8 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                     } else {
                         // 같은 기기의 이전 창을 정리하는 중이면 끝난 뒤에 연다(이전 세션과 새 세션이 겹치지 않게).
                         closingWindows[serial]?.join()
-                        openWindows[serial] = MirrorWindowHolder(effect.device, graph)
+                        val state = restoredWindowState(windowBounds, "mirror.$serial", DpSize(420.dp, 860.dp), rememberSize = false)
+                        openWindows[serial] = MirrorWindowHolder(effect.device, graph, state)
                     }
                 }
             }
@@ -132,7 +134,9 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
         }
     }
 
-    Window(onCloseRequest = quit, title = "ADB Mirror", state = rememberWindowState(size = DpSize(420.dp, 560.dp))) {
+    val listWindowState = remember { restoredWindowState(windowBounds, "list", DpSize(420.dp, 560.dp), rememberSize = true) }
+    Window(onCloseRequest = quit, title = "ADB Mirror", state = listWindowState) {
+        RememberWindowBounds(listWindowState, windowBounds, "list", rememberSize = true)
         DeviceListMenuBar(onOpenSettings = openSettings, onQuit = quit)
         AppTheme { DeviceListRoute(listViewModel) }
     }
@@ -148,6 +152,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                 }
             }
             Window(onCloseRequest = closeWindow, state = holder.windowState, title = "ADB Mirror — ${holder.device.model ?: serial}") {
+                RememberWindowBounds(holder.windowState, windowBounds, "mirror.$serial", rememberSize = false)
                 MirrorMenuBar(holder, onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
                 FitWindowToVideo(holder)
                 AppTheme { MirrorRoute(holder.viewModel) }
