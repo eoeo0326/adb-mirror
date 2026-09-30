@@ -12,6 +12,7 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.Volatile
 
 /**
  * 기기 하나의 미러링 창. Intent → UseCase → [MirrorResult] → [MirrorReducer] → [state].
@@ -48,6 +50,11 @@ class MirrorViewModel(
 
     private var sessionJob: Job? = null
 
+    /** 진행 중인 연결 시도. 끝나면(성공·실패·취소) 완료된다. [shutdown]이 이것을 기다린다. */
+    private var pendingStart: CompletableDeferred<Unit>? = null
+
+    @Volatile private var shuttingDown = false
+
     init {
         viewModelScope.launch { getSettings().collect { reduce(MirrorResult.SettingsLoaded(it)) } }
         connect()
@@ -68,8 +75,10 @@ class MirrorViewModel(
         val current = _state.value
         if (!current.canConnect) return
         val device = current.device
+        if (shuttingDown) return
         reduce(MirrorResult.ConnectStarted)
         sessionJob?.cancel()
+        val started = CompletableDeferred<Unit>().also { pendingStart = it }
         sessionJob = viewModelScope.launch {
             val session = try {
                 startMirroring(device)
@@ -79,6 +88,13 @@ class MirrorViewModel(
                 val message = e.message ?: "연결에 실패했습니다"
                 reduce(MirrorResult.ConnectFailed(message))
                 _effects.trySend(MirrorEffect.Error(message))
+                return@launch
+            } finally {
+                started.complete(Unit)
+            }
+            // 연결하는 사이에 창이 닫혔으면 바로 끝낸다(서버·forward를 남기지 않음).
+            if (shuttingDown) {
+                withContext(NonCancellable) { stopMirroring(session) }
                 return@launch
             }
             _session.value = session
@@ -103,8 +119,13 @@ class MirrorViewModel(
         viewModelScope.launch { sendTouch(session, TouchEvent(intent.action, intent.x, intent.y, size)) }
     }
 
-    /** 앱 종료 직전에 부른다. 세션(서버·forward)을 끝낼 때까지 기다린다. */
+    /**
+     * 창을 닫거나 앱을 끝내기 직전에 부른다. 연결 중이면 그 시도가 끝나기를 기다렸다가
+     * 세션(서버·forward)까지 끝낸다. 여러 번 불러도 안전하다.
+     */
     suspend fun shutdown() = withContext(NonCancellable) {
+        shuttingDown = true
+        pendingStart?.await()
         _session.value?.let { stopMirroring(it) }
         _session.value = null
     }

@@ -18,7 +18,9 @@ import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 import io.github.eoeo0326.adbmirror.feature.mirror.Connection
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
+import kotlinx.coroutines.CompletableDeferred
 import java.awt.GraphicsEnvironment
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 기기 하나의 미러링 창. ViewModel은 창 전용 [ViewModelStore]에 두어,
@@ -32,9 +34,18 @@ class MirrorWindowHolder(val device: Device, graph: AppGraph) {
     /** 올릴 때마다 1씩 늘려 창을 앞으로 가져온다. */
     val focusRequest = mutableIntStateOf(0)
 
+    private val closeStarted = AtomicBoolean(false)
+    private val closed = CompletableDeferred<Unit>()
+
+    /** 세션을 끝낸 뒤 viewModelScope까지 정리한다. 여러 곳(창 닫기·앱 종료·종료 훅)에서 불러도 한 번만 돈다. */
     suspend fun close() {
-        viewModel.shutdown()
-        store.clear()
+        if (!closeStarted.compareAndSet(false, true)) return closed.await()
+        try {
+            viewModel.shutdown()
+            store.clear()
+        } finally {
+            closed.complete(Unit)
+        }
     }
 }
 

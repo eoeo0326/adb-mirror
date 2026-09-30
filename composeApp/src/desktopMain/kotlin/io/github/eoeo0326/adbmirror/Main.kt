@@ -22,16 +22,25 @@ import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** 열려 있는 미러링 창(serial → 창). 종료 훅에서도 접근한다. */
+/** 열려 있는 미러링 창(serial → 창). */
 private val openWindows = mutableStateMapOf<String, MirrorWindowHolder>()
 
+/** 창은 닫혔지만 세션 정리가 끝나지 않은 것(serial → 정리 작업). 종료 훅이 이것도 기다린다. */
+private val closingWindows = ConcurrentHashMap<String, Job>()
+
 private fun closeAllBlocking() = runBlocking {
-    withTimeoutOrNull(3_000) { openWindows.values.toList().forEach { it.close() } }
+    withTimeoutOrNull(3_000) {
+        openWindows.values.toList().forEach { it.close() }
+        closingWindows.values.toList().joinAll()
+    }
 }
 
 fun main() {
@@ -56,8 +65,15 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph) {
         listViewModel.effects.collect { effect ->
             when (effect) {
                 is DeviceListEffect.OpenMirror -> {
-                    val existing = openWindows[effect.device.serial]
-                    if (existing != null) existing.focusRequest.intValue++ else openWindows[effect.device.serial] = MirrorWindowHolder(effect.device, graph)
+                    val serial = effect.device.serial
+                    val existing = openWindows[serial]
+                    if (existing != null) {
+                        existing.focusRequest.intValue++
+                    } else {
+                        // 같은 기기의 이전 창을 정리하는 중이면 끝난 뒤에 연다(이전 세션과 새 세션이 겹치지 않게).
+                        closingWindows[serial]?.join()
+                        openWindows[serial] = MirrorWindowHolder(effect.device, graph)
+                    }
                 }
             }
         }
@@ -81,7 +97,9 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph) {
                 onCloseRequest = {
                     openWindows.remove(serial)
                     listViewModel.onIntent(DeviceListIntent.MirrorClosed(serial))
-                    scope.launch { holder.close() }
+                    val job = scope.launch { holder.close() }
+                    closingWindows[serial] = job
+                    job.invokeOnCompletion { closingWindows.remove(serial, job) }
                 },
                 state = holder.windowState,
                 title = "ADB Mirror — ${holder.device.model ?: serial}",

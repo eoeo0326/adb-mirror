@@ -17,7 +17,9 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -33,6 +35,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
@@ -56,6 +59,8 @@ class MirrorViewModelTest {
     private val settings = MutableStateFlow(Settings())
     private val session = FakeSession()
     private var failStart: String? = null
+    /** 설정하면 start가 이 값이 완료될 때까지 멈춘다(연결 중 상태 재현). */
+    private var startGate: CompletableDeferred<Unit>? = null
     private var startedWith: MirrorOptions? = null
 
     private val settingsRepo = object : SettingsRepository {
@@ -64,6 +69,7 @@ class MirrorViewModelTest {
     }
     private val mirrorRepo = object : MirrorRepository {
         override suspend fun start(serial: String, options: MirrorOptions): MirrorSession {
+            startGate?.await()
             failStart?.let { error(it) }
             startedWith = options
             return session
@@ -135,6 +141,21 @@ class MirrorViewModelTest {
         assertTrue(vm.state.value.settings.viewOnly)
         vm.onIntent(MirrorIntent.Touch(TouchAction.Up, 10, 20))
         assertEquals(1, session.touches.size)
+    }
+
+    @Test
+    fun shutdownWhileConnectingStopsSessionOnceStarted() = runTest {
+        val gate = CompletableDeferred<Unit>().also { startGate = it }
+        val vm = viewModel()
+        assertEquals(Connection.Connecting, vm.state.value.connection)
+        val shutdown = launch { vm.shutdown() }
+        testScheduler.runCurrent()
+        assertFalse(shutdown.isCompleted, "연결 시도가 끝날 때까지 기다려야 한다")
+        gate.complete(Unit) // 창을 닫은 뒤에야 서버가 떴다
+        shutdown.join()
+        assertTrue(session.stopped, "늦게 생긴 세션도 정리해야 한다")
+        assertNull(vm.session.value)
+        vm.shutdown() // 두 번 불러도 안전
     }
 
     @Test
