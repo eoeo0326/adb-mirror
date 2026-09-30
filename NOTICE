@@ -13,3 +13,7 @@ The desktop application uses FFmpeg (https://ffmpeg.org), licensed under the
 GNU Lesser General Public License v2.1 or later, through the JavaCPP Presets
 for FFmpeg (https://github.com/bytedeco/javacpp-presets), licensed under the
 Apache License, Version 2.0. Only the LGPL builds of FFmpeg are used.
+
+WebP frames are encoded with libwebp (https://chromium.googlesource.com/webm/libwebp),
+Copyright (c) 2010 Google Inc., licensed under the BSD 3-Clause License, as included
+in the JavaCPP FFmpeg build.
