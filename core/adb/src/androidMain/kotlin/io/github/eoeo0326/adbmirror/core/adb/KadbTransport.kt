@@ -8,9 +8,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import okio.Buffer
@@ -25,9 +23,7 @@ import kotlin.concurrent.thread
  * Kadb는 블로킹 API라 IO 디스패처에서 부르고, 오래 걸리는 읽기는 취소되면 스트림을 닫아 깨운다.
  */
 class KadbTransport(keyStore: KadbKeyStore) : WirelessAdbTransport {
-    private class Connected(val kadb: Kadb, val device: AdbDevice)
-
-    private val connections = MutableStateFlow<Map<String, Connected>>(emptyMap())
+    private val connections = ConnectionRegistry<Kadb> { kadb -> withContext(Dispatchers.IO) { kadb.close() } }
 
     init {
         keyStore.install()
@@ -41,33 +37,30 @@ class KadbTransport(keyStore: KadbKeyStore) : WirelessAdbTransport {
         }
     }
 
-    override suspend fun connect(host: String, port: Int): AdbDevice = withContext(Dispatchers.IO) {
+    override suspend fun connect(host: String, port: Int): AdbDevice {
         val serial = "$host:$port"
-        connections.value[serial]?.let { return@withContext it.device }
-        val kadb = Kadb.create(host, port, connectTimeout = CONNECT_TIMEOUT_MS)
-        val model = try {
-            kadb.shell("getprop ro.product.model").output.trim()
-        } catch (e: Exception) {
-            runCatching { kadb.close() }
-            throw AdbException("연결하지 못했습니다. 무선 디버깅이 켜져 있고 이 앱과 페어링했는지 확인하세요 (${e.message ?: e::class.simpleName})")
+        // 같은 기기를 동시에 연결해도 Kadb 연결은 하나만 열고, 연 연결은 반드시 등록하거나 닫는다.
+        return connections.getOrOpen(serial) {
+            withContext(Dispatchers.IO) {
+                val kadb = Kadb.create(host, port, connectTimeout = CONNECT_TIMEOUT_MS, socketTimeout = 0)
+                val model = try {
+                    kadb.shell("getprop ro.product.model").output.trim()
+                } catch (e: Exception) {
+                    runCatching { kadb.close() }
+                    throw AdbException("연결하지 못했습니다. 무선 디버깅이 켜져 있고 이 앱과 페어링했는지 확인하세요 (${e.message ?: e::class.simpleName})")
+                }
+                kadb to AdbDevice(serial, "device", model.ifBlank { null })
+            }
         }
-        val device = AdbDevice(serial, "device", model.ifBlank { null })
-        connections.update { it + (serial to Connected(kadb, device)) }
-        device
     }
 
-    override suspend fun disconnect(serial: String) = withContext(Dispatchers.IO + NonCancellable) {
-        val removed = connections.value[serial] ?: return@withContext
-        connections.update { it - serial }
-        runCatching { removed.kadb.close() }
-        Unit
-    }
+    override suspend fun disconnect(serial: String) = connections.remove(serial)
 
-    override suspend fun devices(): List<AdbDevice> = connections.value.values.map { it.device }
+    override suspend fun devices(): List<AdbDevice> = connections.entries.value.values.map { it.device }
 
-    override fun trackDevices(): Flow<List<AdbDevice>> = connections.map { m -> m.values.map { it.device } }
+    override fun trackDevices(): Flow<List<AdbDevice>> = connections.entries.map { m -> m.values.map { it.device } }
 
-    private fun kadb(serial: String): Kadb = connections.value[serial]?.kadb ?: throw AdbException("연결되지 않은 기기입니다: $serial")
+    private fun kadb(serial: String): Kadb = connections[serial] ?: throw AdbException("연결되지 않은 기기입니다: $serial")
 
     override suspend fun push(serial: String, data: ByteArray, remotePath: String) = withContext(Dispatchers.IO) {
         kadb(serial).push(Buffer().write(data), remotePath, FILE_MODE, System.currentTimeMillis())

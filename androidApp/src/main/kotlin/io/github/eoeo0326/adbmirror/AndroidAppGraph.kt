@@ -47,9 +47,9 @@ import kotlinx.coroutines.flow.flow
 import java.io.File
 
 /** Android 앱의 수동 DI. 무선 디버깅(Kadb)으로 기기에 붙는다. */
-class AndroidAppGraph(filesDir: File) {
+class AndroidAppGraph(privateDir: File) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val transport = KadbTransport(KadbKeyStore(File(filesDir, "adb")))
+    private val transport = KadbTransport(KadbKeyStore(File(privateDir, "adb")))
     private val settings = InMemorySettingsRepository()
     private val devices = DeviceRepositoryImpl(transport)
     private val wireless = WirelessDeviceRepositoryImpl(transport)
