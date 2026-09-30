@@ -53,6 +53,7 @@ Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop�
 ./gradlew :core:data:jvmTest -Padbmirror.device=<serial>  # 실기기 통합 테스트
 ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 수 출력
 ADB_MIRROR_HWDECODE=0 ./gradlew :composeApp:run   # 하드웨어 디코딩 끄기(비교·문제 확인용)
+ADB_MIRROR_GPU_YUV=0 ./gradlew :composeApp:run    # GPU YUV 그리기 끄기(BGRA로 그림)
 scripts/measure-cpu.sh <serial> 10                # 스크롤하며 10초간 CPU 평균·최대
 ```
 
