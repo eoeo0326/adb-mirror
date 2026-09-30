@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/icon/png/icon_256.png" width="128" alt="ADB Mirror 아이콘"></p>
+
 # ADB Mirror
 
 adb로 연결한 Android 기기 화면을 데스크톱 창에 띄우고, 마우스로 조작하고, 스크린샷을 찍는 도구입니다.
@@ -74,6 +76,10 @@ swift build -c release
 ## 로드맵
 
 KMP/CMP로 옮기는 작업은 Phase 0~4로 나눠 [GitHub Milestones](https://github.com/eoeo0326/adb-mirror/milestones)에서 관리합니다. 요약은 [docs/ROADMAP.md](docs/ROADMAP.md)에 있습니다.
+
+## 아이콘
+
+`assets/icon/`에 원본 SVG와 여러 크기의 PNG(16~1024px), macOS용 `AppIcon.icns`, Windows용 `icon.ico`가 있습니다. 겹친 두 폰은 원본과 미러링된 화면을, 아래의 옅은 비침은 거울을 나타냅니다.
 
 ## 라이선스
 
