@@ -64,6 +64,8 @@ ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 �
 | Windows | `./gradlew :composeApp:packageMsi` | `msi/ADB Mirror-<버전>.msi` (사용자 단위 설치, 관리자 권한 불필요) |
 | Linux | `./gradlew :composeApp:packageDeb` · `packageRpm` | `deb/`, `rpm/` (`adb-mirror`) |
 
+- `./gradlew :composeApp:packageDistributions`는 이 OS의 설치 파일과 포터블 배포본을 `composeApp/build/release/`에 `ADB-Mirror-<버전>-<os>-<arch>.<확장자>` 이름으로 모읍니다.
+  - 포터블: Windows `…-portable.zip`, Linux `…-portable.tar.gz`. 풀어서 바로 실행하고, 설정은 풀린 폴더의 `data/`에 저장됩니다(`portable` 파일을 지우면 설치형처럼 사용자 폴더에 저장). macOS는 앱 번들 안에 쓸 수 없어 포터블을 만들지 않습니다.
 - 버전은 `gradle.properties`의 `appVersion`(MAJOR.MINOR.PATCH)입니다. macOS 패키지는 첫 숫자가 0이면 만들 수 없어서, 1.0 전까지는 macOS 패키지 버전만 첫 숫자를 1로 씁니다(0.3.0 → 1.3.0).
 - 아직 Apple 개발자 서명·공증을 하지 않았습니다. 받은 dmg의 앱이 열리지 않으면 Finder에서 우클릭 → 열기를 누르세요.
 

@@ -1,0 +1,6 @@
+ADB Mirror 포터블 표식 파일입니다.
+
+이 파일이 실행 파일 옆(Linux는 bin/ 위)에 있으면 설정을 같은 폴더의 data/ 에 저장합니다.
+지우면 설치형처럼 사용자 폴더(Windows %APPDATA%\ADB Mirror, Linux ~/.config/adb-mirror)에 저장합니다.
+
+This marker makes ADB Mirror keep its settings in the data/ folder next to it.
