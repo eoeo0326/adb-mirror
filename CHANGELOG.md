@@ -20,6 +20,7 @@
   - adb를 못 찾으면 첫 창에서 adb 위치를 지정할 수 있음
 - MP4 녹화(⌘R / Ctrl+R): 다시 인코딩하지 않고 fragmented MP4로 기록, 시작 시 key frame 즉시 요청, 회전하면 `_part2`, `_part3`…으로 나눔. 녹화 중 경과 시간 표시, 연결이 끊기거나 창을 닫아도 그때까지 저장
 - GIF·WebP 변환: 녹화 저장 알림의 "변환…"·창 메뉴 "최근 녹화 변환…"·파일 > 녹화 파일 변환…에서 구간·fps·너비·반복·품질(WebP)·디더링(GIF)을 골라 변환, 진행률·취소, 예상 크기와 20MB 초과 경고. Desktop은 FFmpeg로 디코딩하고 WebP는 FFmpeg 내장 libwebp로 인코딩
+- 설치 파일 설정: macOS dmg(번들 ID·아이콘·개발자 도구 분류), Windows msi(사용자 단위 설치·시작 메뉴·고정 upgradeUuid), Linux deb·rpm(`adb-mirror`, Development 메뉴). 1.0 전 macOS 패키지 버전은 첫 숫자를 1로 씀
 - scrcpy-server를 Gradle 작업이 받아 sha256 검증 후 JVM 리소스로 번들 (`scrcpy.version`·`scrcpy.sha256`은 `gradle.properties`)
 
 ## [0.3.0] - 2026-09-30
