@@ -8,6 +8,7 @@
 - Swift 프로토타입을 `macos-swift/`로 이동 (실행: `cd macos-swift && ./run.sh`)
 
 ### 추가
+- GIF89a 인코더(median cut 256색 팔레트, Floyd–Steinberg 디더링 선택, LZW, 반복 설정)와 애니메이션 WebP 컨테이너 muxer(VP8X·ANIM·ANMF). ImageIO로 디코딩 확인, 검증 스크립트 `scripts/check_animated_image.swift`
 - fragmented MP4 muxer(`Mp4Muxer`): H.264를 다시 인코딩하지 않고 ftyp·moov(avcC) + moof·mdat 조각으로 기록. fixture로 만든 MP4를 AVFoundation에서 재생·디코딩 확인, 검증 스크립트 `scripts/check_mp4.swift`
 - MVI 계약(`MirrorState`·`MirrorIntent`·`MirrorResult`·`MirrorEffect`)과 순수 Reducer, 상태 전이 테스트
 - scrcpy 프로토콜 공통 코드: 영상 스트림 파서(`VideoStreamParser`), 컨트롤 메시지 직렬화(터치·`RESET_VIDEO`), Annex B 분리. 실제 fixture와 참조 파서 결과 대조 테스트
