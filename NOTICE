@@ -17,3 +17,13 @@ Apache License, Version 2.0. Only the LGPL builds of FFmpeg are used.
 WebP frames are encoded with libwebp (https://chromium.googlesource.com/webm/libwebp),
 Copyright (c) 2010 Google Inc., licensed under the BSD 3-Clause License, as included
 in the JavaCPP FFmpeg build.
+
+The Android application uses the following libraries:
+- Kadb (https://github.com/flyfishxu/Kadb), licensed under the Apache License, Version 2.0,
+  derived from dadb (https://github.com/mobile-dev-inc/dadb) by mobile.dev inc.
+- spake2-java (https://github.com/flyfishxu/spake2-java), used for wireless debugging pairing,
+  licensed under the GNU Lesser General Public License v3.0. It is linked as a separate library;
+  because this project is open source, you can rebuild the application with a modified version of it.
+- Bouncy Castle (https://www.bouncycastle.org), licensed under the MIT License.
+- Okio (https://github.com/square/okio), licensed under the Apache License, Version 2.0.
+- AndroidHiddenApiBypass (https://github.com/LSPosed/AndroidHiddenApiBypass), licensed under the Apache License, Version 2.0.
