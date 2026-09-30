@@ -69,7 +69,20 @@ ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 �
 - 버전은 `gradle.properties`의 `appVersion`(MAJOR.MINOR.PATCH)입니다. macOS 패키지는 첫 숫자가 0이면 만들 수 없어서, 1.0 전까지는 macOS 패키지 버전만 첫 숫자를 1로 씁니다(0.3.0 → 1.3.0).
 - 아직 Apple 개발자 서명·공증을 하지 않았습니다. 받은 dmg의 앱이 열리지 않으면 Finder에서 우클릭 → 열기를 누르세요.
 
+### CI와 릴리즈
 
+[GitHub Actions](.github/workflows/build.yml)가 PR·main 푸시마다 테스트를 돌리고, macOS(arm64·x64)·Windows x64·Linux(x64·arm64)에서 설치 파일과 포터블을 만듭니다. `v*` 태그를 올리면 그 파일들과 `SHA256SUMS`를 GitHub Release에 올립니다(릴리즈가 없으면 CHANGELOG의 해당 버전 절로 만듭니다).
+
+macOS 서명·공증은 저장소 Secrets에 아래 값이 있을 때만 합니다. 없으면 ad-hoc 서명으로 만듭니다.
+
+| Secret | 내용 |
+|---|---|
+| `MACOS_CERTIFICATE` | Developer ID Application 인증서(.p12)를 base64로 |
+| `MACOS_CERTIFICATE_PASSWORD` | .p12 암호 |
+| `MACOS_SIGNING_IDENTITY` | 예: `Developer ID Application: 이름 (TEAMID)` |
+| `APPLE_ID` · `APPLE_APP_PASSWORD` · `APPLE_TEAM_ID` | 공증용 Apple ID, 앱 암호, 팀 ID |
+
+### 설정 파일 위치
 
 설정(해상도·fps·토글·저장 폴더·adb 경로)은 `settings.properties`에 저장됩니다.
 
