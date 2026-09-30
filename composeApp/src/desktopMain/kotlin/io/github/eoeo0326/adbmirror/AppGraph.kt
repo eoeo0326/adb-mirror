@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror
 import io.github.eoeo0326.adbmirror.core.adb.AdbBinaryTransport
 import io.github.eoeo0326.adbmirror.core.data.device.DeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
+import io.github.eoeo0326.adbmirror.core.data.recording.FileRecordingRepository
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ClasspathServerJarSource
 import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
@@ -17,7 +18,9 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.StartRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.StopRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
@@ -31,6 +34,7 @@ class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepo
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val devices = DeviceRepositoryImpl(transport)
     private val screenshots = ScreenshotRepositoryImpl(transport, DesktopScreenshotSink())
+    private val recordings = FileRecordingRepository(scope)
     private val mirror = MirrorRepositoryImpl(ScrcpyServerLauncher(transport, ClasspathServerJarSource, log = ::println), scope)
 
     fun settingsViewModel() = SettingsViewModel(GetSettingsUseCase(settings), UpdateSettingsUseCase(settings))
@@ -48,5 +52,7 @@ class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepo
         captureScreenshot = CaptureScreenshotUseCase(screenshots),
         copyScreenshot = CopyScreenshotUseCase(screenshots),
         saveScreenshot = SaveScreenshotUseCase(screenshots, settings),
+        startRecording = StartRecordingUseCase(recordings, settings),
+        stopRecording = StopRecordingUseCase(recordings),
     )
 }

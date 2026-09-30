@@ -14,7 +14,9 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.StartRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.StopRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -32,6 +34,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
+import kotlin.time.TimeSource
 
 /**
  * 기기 하나의 미러링 창. Intent → UseCase → [MirrorResult] → [MirrorReducer] → [state].
@@ -49,6 +52,8 @@ class MirrorViewModel(
     private val captureScreenshot: CaptureScreenshotUseCase,
     private val copyScreenshot: CopyScreenshotUseCase,
     private val saveScreenshot: SaveScreenshotUseCase,
+    private val startRecording: StartRecordingUseCase,
+    private val stopRecording: StopRecordingUseCase,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MirrorState(device))
     val state: StateFlow<MirrorState> = _state.asStateFlow()
@@ -70,6 +75,10 @@ class MirrorViewModel(
     private var originalShowTouches: Boolean? = null
     private val showTouchesLock = Mutex()
 
+    /** 녹화 시작·정지를 한 줄로 세운다. 시작하는 도중 세션이 끝나도 시작이 끝난 뒤에 정지해 녹화가 남지 않게 한다. */
+    private val recordingLock = Mutex()
+    private val clock = TimeSource.Monotonic.markNow()
+
     init {
         viewModelScope.launch {
             getSettings().collect { settings ->
@@ -90,6 +99,8 @@ class MirrorViewModel(
             MirrorIntent.ToggleTouchEffect -> viewModelScope.launch { updateSettings { it.copy(touchEffect = !it.touchEffect) } }
             MirrorIntent.CopyScreenshot -> screenshot { copyScreenshot(it); MirrorEffect.ShowMessage("스크린샷을 클립보드에 복사했습니다") }
             MirrorIntent.SaveScreenshot -> screenshot { MirrorEffect.ScreenshotSaved(saveScreenshot(it)) }
+            MirrorIntent.StartRecording -> beginRecording()
+            MirrorIntent.StopRecording -> endRecording()
             MirrorIntent.ToggleShowTouches -> viewModelScope.launch { updateSettings { it.copy(showTouches = !it.showTouches) } }
             else -> _effects.trySend(MirrorEffect.ShowMessage("아직 준비 중인 기능입니다"))
         }
@@ -131,7 +142,10 @@ class MirrorViewModel(
                         is SessionEvent.VideoSizeChanged -> reduce(MirrorResult.VideoSizeChanged(event.size))
                         is SessionEvent.Ended -> {
                             _session.value = null
-                            withContext(NonCancellable) { syncShowTouches() }
+                            withContext(NonCancellable) {
+                                finishRecording(session)
+                                syncShowTouches()
+                            }
                             reduce(MirrorResult.SessionEnded(event.error))
                             event.error?.let { _effects.trySend(MirrorEffect.Error(it)) }
                             sessionJob?.cancel()
@@ -163,6 +177,48 @@ class MirrorViewModel(
         }
     }
 
+    private fun beginRecording() {
+        val session = _session.value ?: return
+        val s = _state.value
+        if (s.connection !is Connection.Mirroring || s.recording != RecordingState.Idle) return
+        reduce(MirrorResult.RecordingStarting)
+        viewModelScope.launch {
+            recordingLock.withLock {
+                try {
+                    startRecording(session)
+                    reduce(MirrorResult.RecordingStarted(clock.elapsedNow().inWholeMilliseconds))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    reduce(MirrorResult.RecordingStopped)
+                    _effects.trySend(MirrorEffect.Error("녹화를 시작하지 못했습니다: ${e.message ?: e::class.simpleName}"))
+                }
+            }
+        }
+    }
+
+    private fun endRecording() {
+        val session = _session.value ?: return
+        if (_state.value.recording !is RecordingState.Recording) return
+        reduce(MirrorResult.RecordingStopping)
+        viewModelScope.launch { withContext(NonCancellable) { finishRecording(session) } }
+    }
+
+    /** 그 세션의 녹화를 끝내고 결과를 알린다. 녹화 중이 아니면 아무것도 하지 않는다. */
+    private suspend fun finishRecording(session: MirrorSession) {
+        val recording = try {
+            recordingLock.withLock { stopRecording(session) }
+        } catch (e: Exception) {
+            reduce(MirrorResult.RecordingStopped)
+            _effects.trySend(MirrorEffect.Error("녹화를 마무리하지 못했습니다: ${e.message ?: e::class.simpleName}"))
+            return
+        } ?: return
+        reduce(MirrorResult.RecordingStopped)
+        _effects.trySend(
+            if (recording.files.isEmpty()) MirrorEffect.ShowMessage("녹화된 화면이 없어 파일을 만들지 않았습니다") else MirrorEffect.RecordingSaved(recording.files),
+        )
+    }
+
     private fun touch(intent: MirrorIntent.Touch) {
         val session = _session.value ?: return
         val size = (_state.value.connection as? Connection.Mirroring)?.videoSize ?: return
@@ -176,7 +232,10 @@ class MirrorViewModel(
     suspend fun shutdown() = withContext(NonCancellable) {
         shuttingDown = true
         pendingStart?.await()
-        _session.value?.let { stopMirroring(it) }
+        _session.value?.let {
+            finishRecording(it)
+            stopMirroring(it)
+        }
         _session.value = null
         syncShowTouches()
     }
