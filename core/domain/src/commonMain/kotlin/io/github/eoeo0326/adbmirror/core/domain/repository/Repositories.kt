@@ -1,6 +1,8 @@
 package io.github.eoeo0326.adbmirror.core.domain.repository
 
+import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
@@ -37,6 +39,13 @@ interface RecordingRepository {
 
     /** 남은 조각까지 쓰고 파일을 닫는다. 그 기기가 녹화 중이 아니면 null. */
     suspend fun stop(serial: String): Recording?
+    /** 변환 전에 길이·크기를 읽는다. */
+    suspend fun info(file: String): VideoInfo
+
+    /** 이 플랫폼에서 만들 수 있는 형식(예: WebP 인코더가 없으면 GIF만). */
+    fun supportedFormats(): Set<AnimatedFormat>
+
+    /** 원본 옆에 같은 이름의 .gif/.webp로 쓴다. 흐름을 취소하면 쓰던 파일을 지운다. */
     fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress>
 }
 

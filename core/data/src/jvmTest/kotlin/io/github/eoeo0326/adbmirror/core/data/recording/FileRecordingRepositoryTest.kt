@@ -41,7 +41,7 @@ class FileRecordingRepositoryTest {
 
     private val home = Files.createTempDirectory("adbmirror-rec").toFile()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val repo = FileRecordingRepository(scope, home) { LocalDateTime.of(2026, 9, 30, 9, 8, 7) }
+    private val repo = FileRecordingRepository(scope, home, now = { LocalDateTime.of(2026, 9, 30, 9, 8, 7) })
 
     @AfterTest fun tearDown() = scope.cancel()
 

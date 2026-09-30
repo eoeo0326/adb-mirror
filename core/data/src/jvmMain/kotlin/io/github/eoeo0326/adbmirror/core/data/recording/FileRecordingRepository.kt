@@ -1,10 +1,15 @@
 package io.github.eoeo0326.adbmirror.core.data.recording
 
+import io.github.eoeo0326.adbmirror.core.data.conversion.AnimationConverter
+import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegVideoFrameSource
+import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegWebpFrameEncoder
 import io.github.eoeo0326.adbmirror.core.data.screenshot.defaultOutputDir
+import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.Recording
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.repository.RecordingRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -15,12 +20,14 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -32,6 +39,7 @@ class FileRecordingRepository(
     private val scope: CoroutineScope,
     private val home: File = File(System.getProperty("user.home")),
     private val now: () -> LocalDateTime = LocalDateTime::now,
+    private val converter: AnimationConverter = AnimationConverter(FfmpegVideoFrameSource(), FfmpegWebpFrameEncoder.createOrNull()),
 ) : RecordingRepository {
     private class Active(val recorder: Recorder, val job: Job)
 
@@ -64,8 +72,29 @@ class FileRecordingRepository(
         Recording(serial, result.files, result.durationMs)
     }
 
-    override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> =
-        flow { throw UnsupportedOperationException("GIF·WebP 변환은 아직 준비 중입니다") }
+    override suspend fun info(file: String): VideoInfo = converter.info(file)
+
+    override fun supportedFormats(): Set<AnimatedFormat> = converter.supportedFormats
+
+    /** 원본 옆 `<이름>.gif|webp`(있으면 `_2`…)로 쓴다. 끝날 때까지 `.part`에 쓰고, 취소·실패하면 지운다. */
+    override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> = flow {
+        val source = File(file)
+        val ext = if (options.format == AnimatedFormat.Gif) "gif" else "webp"
+        val base = source.name.substringBeforeLast('.')
+        val dir = source.absoluteFile.parentFile
+        val target = generateSequence(1) { it + 1 }
+            .map { n -> File(dir, if (n == 1) "$base.$ext" else "${base}_$n.$ext") }
+            .first { !it.exists() }
+        val tmp = File(dir, target.name + ".part")
+        try {
+            val bytes = converter.convert(file, options) { emit(ConversionProgress.Running(it)) }
+            tmp.writeBytes(bytes)
+            Files.move(tmp.toPath(), target.toPath())
+            emit(ConversionProgress.Done(target.absolutePath))
+        } finally {
+            tmp.delete()
+        }
+    }.flowOn(Dispatchers.Default)
 
     private fun uniqueFile(dir: File, base: String, index: Int): File {
         val name = if (index == 1) base else "${base}_part$index"

@@ -1,6 +1,8 @@
 package io.github.eoeo0326.adbmirror.core.domain
 
+import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
@@ -68,6 +70,8 @@ class FakeRecordingRepository(private val session: FakeSession) : RecordingRepos
         session.log += "recordStop:$serial"
         return null
     }
+    override suspend fun info(file: String) = VideoInfo(10_000, 606, 1280)
+    override fun supportedFormats() = AnimatedFormat.entries.toSet()
     override fun convert(file: String, options: ConversionOptions): Flow<ConversionProgress> =
         flowOf(ConversionProgress.Done("$file.${options.format.name.lowercase()}"))
 }

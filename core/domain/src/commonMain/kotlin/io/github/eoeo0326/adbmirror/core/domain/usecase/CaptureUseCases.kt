@@ -5,6 +5,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.Recording
 import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
+import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.repository.RecordingRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.ScreenshotRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
@@ -52,6 +53,10 @@ class StartRecordingUseCase(
 
 class StopRecordingUseCase(private val recordings: RecordingRepository) {
     suspend operator fun invoke(session: MirrorSession): Recording? = recordings.stop(session.serial)
+}
+
+class GetVideoInfoUseCase(private val recordings: RecordingRepository) {
+    suspend operator fun invoke(file: String): VideoInfo = recordings.info(file)
 }
 
 /** 옵션이 허용 범위를 벗어나면 변환을 시작하지 않고 [IllegalArgumentException]을 던진다. */
