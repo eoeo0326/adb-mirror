@@ -14,7 +14,7 @@ import org.bytedeco.javacpp.DoublePointer
  * FFmpeg(libavcodec) H.264 디코더. Annex B 패킷을 그대로 넣고 BGRA 프레임을 받는다.
  * 한 스레드에서만 쓴다. 지연을 줄이려고 프레임 스레딩 대신 low-delay·slice 스레딩을 쓴다.
  */
-class FfmpegH264Decoder : AutoCloseable {
+class FfmpegH264Decoder : FrameDecoder {
     /** [bgra]는 다음 [decode] 호출에서 덮어쓰인다. 필요하면 복사해 쓴다. */
     fun interface FrameSink {
         fun onFrame(width: Int, height: Int, bgra: ByteArray)
@@ -37,7 +37,7 @@ class FfmpegH264Decoder : AutoCloseable {
     }
 
     /** config 패킷도 그대로 넣는다(SPS·PPS는 스트림 안에서 읽는다). 나온 프레임마다 [sink]를 부른다. */
-    fun decode(data: ByteArray, sink: FrameSink) {
+    override fun decode(data: ByteArray, sink: FrameSink) {
         if (avcodec.av_new_packet(packet, data.size) < 0) return
         packet.data().put(data, 0, data.size)
         val sent = avcodec.avcodec_send_packet(context, packet)
