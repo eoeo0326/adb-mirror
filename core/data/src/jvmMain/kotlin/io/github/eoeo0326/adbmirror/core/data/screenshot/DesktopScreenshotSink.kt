@@ -41,7 +41,7 @@ class DesktopScreenshotSink(
         error("${folder.path}에 같은 시각의 파일이 너무 많습니다")
     }
 
-    internal fun defaultDir(): File =
+    fun defaultDir(): File =
         listOf("Desktop", "Pictures").map { File(home, it) }.firstOrNull { it.isDirectory } ?: home
 
     private class ImageSelection(private val image: Image) : Transferable {

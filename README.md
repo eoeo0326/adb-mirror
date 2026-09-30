@@ -43,7 +43,7 @@ swift build -c release
 
 ## KMP 앱 (개발 중)
 
-Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop에서 기기 선택 → 미러링 → 터치까지 됩니다(Android·Web은 준비 중). JDK 21과 Android SDK(compileSdk 37)가 필요하고, scrcpy-server는 빌드할 때 Gradle이 받아 옵니다.
+Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop에서 기기 선택 → 미러링 → 터치, 클릭 이펙트, 스크린샷, 설정 저장까지 됩니다(Android·Web은 준비 중). JDK 21과 Android SDK(compileSdk 37)가 필요하고, scrcpy-server는 빌드할 때 Gradle이 받아 옵니다.
 
 ```bash
 ./gradlew :composeApp:run                         # Desktop
@@ -53,6 +53,19 @@ Kotlin Multiplatform + Compose Multiplatform 버전입니다. 지금은 Desktop�
 ./gradlew :core:data:jvmTest -Padbmirror.device=<serial>  # 실기기 통합 테스트
 ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 수 출력
 ```
+
+### 설정 파일 위치
+
+설정(해상도·fps·토글·저장 폴더·adb 경로)은 `settings.properties`에 저장됩니다.
+
+| 환경 | 위치 |
+|---|---|
+| macOS | `~/Library/Application Support/ADB Mirror/` |
+| Windows | `%APPDATA%\ADB Mirror\` |
+| Linux | `$XDG_CONFIG_HOME/adb-mirror/` (없으면 `~/.config/adb-mirror/`) |
+| 포터블 | 실행 파일 폴더(Linux는 `bin/`의 상위)에 `portable` 파일이 있으면 그 옆 `data/` |
+
+개발 중에는 `ADB_MIRROR_DATA_DIR=<폴더>`로 위치를 바꿀 수 있습니다.
 
 ## 구조
 
