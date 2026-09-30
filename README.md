@@ -25,17 +25,18 @@ adb로 연결한 Android 기기 화면을 데스크톱 창에 띄우고, 마우�
 
 ```bash
 git clone https://github.com/eoeo0326/adb-mirror.git
-cd adb-mirror
+cd adb-mirror/macos-swift
 ./run.sh                          # 연결된 첫 기기
 ./run.sh -s <serial> --view-only  # 기기 지정, 보기 전용
 ```
 
-`run.sh`는 처음 실행할 때 `scrcpy-server`를 받아 sha256을 검증하고, 빌드한 뒤 실행합니다. Finder에서 `ADB Mirror.command`를 더블클릭해도 됩니다.
+`run.sh`는 처음 실행할 때 `scrcpy-server`를 받아 sha256을 검증하고, 빌드한 뒤 실행합니다. Finder에서 `macos-swift/ADB Mirror.command`를 더블클릭해도 됩니다.
 
-수동으로 빌드하려면 다음과 같이 합니다.
+수동으로 빌드하려면 레포 루트에서 다음과 같이 합니다.
 
 ```bash
 ./scripts/fetch-server.sh
+cd macos-swift
 swift build -c release
 .build/release/adb-mirror
 ```
@@ -71,7 +72,7 @@ swift build -c release
 ```
 
 - scrcpy는 화면이 바뀔 때만 프레임을 보냅니다. 그래서 정지 화면에서는 `--stats`가 fps=0으로 나오는 것이 정상입니다.
-- 서버와 클라이언트 프로토콜은 버전 간 호환되지 않습니다. `scripts/fetch-server.sh`의 `VERSION`과 `Sources/adb-mirror/ScrcpyServer.swift`의 `serverVersion`은 항상 함께 바꿔야 합니다.
+- 서버와 클라이언트 프로토콜은 버전 간 호환되지 않습니다. `scripts/fetch-server.sh`의 `VERSION`과 `macos-swift/Sources/adb-mirror/ScrcpyServer.swift`의 `serverVersion`은 항상 함께 바꿔야 합니다.
 
 ## 로드맵
 
