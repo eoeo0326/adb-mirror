@@ -2,10 +2,16 @@ package io.github.eoeo0326.adbmirror.feature.mirror
 
 /** 부수효과 없는 상태 전이. 같은 입력이면 항상 같은 State를 돌려준다. */
 object MirrorReducer {
-    fun reduce(state: MirrorState, result: MirrorResult): MirrorState = when (result) {
+    fun reduce(state: MirrorState, result: MirrorResult): MirrorState {
+        // 이전 세션의 늦은 결과(끊긴 세션의 녹화 정지 등)가 지금 세션 상태를 덮지 않게 한다.
+        if (result is SessionScoped && result.sessionId != state.sessionId) return state
+        return reduceCurrent(state, result)
+    }
+
+    private fun reduceCurrent(state: MirrorState, result: MirrorResult): MirrorState = when (result) {
         is MirrorResult.SettingsLoaded -> state.copy(settings = result.settings)
 
-        MirrorResult.ConnectStarted -> state.copy(connection = Connection.Connecting)
+        is MirrorResult.ConnectStarted -> state.copy(connection = Connection.Connecting, sessionId = result.sessionId, recording = RecordingState.Idle)
 
         is MirrorResult.ConnectFailed -> state.copy(connection = Connection.Error(result.message))
 
@@ -19,7 +25,7 @@ object MirrorReducer {
             recording = RecordingState.Idle,
         )
 
-        MirrorResult.RecordingStarting ->
+        is MirrorResult.RecordingStarting ->
             if (state.connection is Connection.Mirroring && state.recording == RecordingState.Idle) {
                 state.copy(recording = RecordingState.Starting)
             } else {
@@ -34,10 +40,10 @@ object MirrorReducer {
                 state
             }
 
-        MirrorResult.RecordingStopping ->
+        is MirrorResult.RecordingStopping ->
             if (state.recording is RecordingState.Recording) state.copy(recording = RecordingState.Stopping) else state
 
-        MirrorResult.RecordingStopped -> state.copy(recording = RecordingState.Idle)
+        is MirrorResult.RecordingStopped -> state.copy(recording = RecordingState.Idle)
 
         is MirrorResult.RecordingSaved -> state.copy(lastRecording = result.files)
 
