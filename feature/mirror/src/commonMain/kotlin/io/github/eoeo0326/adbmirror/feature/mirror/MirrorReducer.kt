@@ -46,6 +46,9 @@ object MirrorReducer {
         is MirrorResult.ConversionFailed -> state.copy(conversion = ConversionState.Failed(result.message))
         MirrorResult.ConversionCancelled -> state.copy(conversion = ConversionState.Idle)
 
+        MirrorResult.ScreenshotStarted -> state.copy(capturingScreenshot = true)
+        MirrorResult.ScreenshotFinished -> state.copy(capturingScreenshot = false)
+
         is MirrorResult.StatusShown -> state.copy(statusMessage = result.message)
         MirrorResult.StatusCleared -> state.copy(statusMessage = null)
     }

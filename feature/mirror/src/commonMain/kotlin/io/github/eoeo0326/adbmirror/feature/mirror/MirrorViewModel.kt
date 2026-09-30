@@ -3,10 +3,14 @@ package io.github.eoeo0326.adbmirror.feature.mirror
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -42,6 +46,9 @@ class MirrorViewModel(
     private val sendTouch: SendTouchUseCase,
     private val updateSettings: UpdateSettingsUseCase,
     private val setShowTouches: SetShowTouchesUseCase,
+    private val captureScreenshot: CaptureScreenshotUseCase,
+    private val copyScreenshot: CopyScreenshotUseCase,
+    private val saveScreenshot: SaveScreenshotUseCase,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MirrorState(device))
     val state: StateFlow<MirrorState> = _state.asStateFlow()
@@ -81,6 +88,8 @@ class MirrorViewModel(
             is MirrorIntent.Touch -> touch(intent)
             MirrorIntent.ToggleViewOnly -> viewModelScope.launch { updateSettings { it.copy(viewOnly = !it.viewOnly) } }
             MirrorIntent.ToggleTouchEffect -> viewModelScope.launch { updateSettings { it.copy(touchEffect = !it.touchEffect) } }
+            MirrorIntent.CopyScreenshot -> screenshot { copyScreenshot(it); MirrorEffect.ShowMessage("스크린샷을 클립보드에 복사했습니다") }
+            MirrorIntent.SaveScreenshot -> screenshot { MirrorEffect.ScreenshotSaved(saveScreenshot(it)) }
             MirrorIntent.ToggleShowTouches -> viewModelScope.launch { updateSettings { it.copy(showTouches = !it.showTouches) } }
             else -> _effects.trySend(MirrorEffect.ShowMessage("아직 준비 중인 기능입니다"))
         }
@@ -135,6 +144,23 @@ class MirrorViewModel(
         }
         // 본문이 시작되기도 전에 취소돼 finally가 돌지 않는 경우에도 shutdown()이 영원히 기다리지 않게 한다.
         sessionJob?.invokeOnCompletion { started.complete(Unit) }
+    }
+
+    /** 기기 원본 해상도로 한 장 받아 [deliver]로 넘긴다. 미러링 연결과 무관하게 adb만 되면 된다. */
+    private fun screenshot(deliver: suspend (Screenshot) -> MirrorEffect) {
+        if (_state.value.capturingScreenshot) return
+        reduce(MirrorResult.ScreenshotStarted)
+        viewModelScope.launch {
+            try {
+                _effects.trySend(deliver(captureScreenshot(_state.value.device.serial)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _effects.trySend(MirrorEffect.Error("스크린샷 실패: ${e.message ?: e::class.simpleName}"))
+            } finally {
+                reduce(MirrorResult.ScreenshotFinished)
+            }
+        }
     }
 
     private fun touch(intent: MirrorIntent.Touch) {

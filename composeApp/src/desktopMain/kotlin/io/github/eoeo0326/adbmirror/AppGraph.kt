@@ -4,11 +4,16 @@ import io.github.eoeo0326.adbmirror.core.adb.AdbBinaryTransport
 import io.github.eoeo0326.adbmirror.core.data.device.DeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ClasspathServerJarSource
+import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
+import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.data.settings.InMemorySettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -25,6 +30,7 @@ class AppGraph(transport: AdbBinaryTransport) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val settings = InMemorySettingsRepository()
     private val devices = DeviceRepositoryImpl(transport)
+    private val screenshots = ScreenshotRepositoryImpl(transport, DesktopScreenshotSink())
     private val mirror = MirrorRepositoryImpl(ScrcpyServerLauncher(transport, ClasspathServerJarSource, log = ::println), scope)
 
     fun deviceListViewModel() = DeviceListViewModel(GetDevicesUseCase(devices))
@@ -37,5 +43,8 @@ class AppGraph(transport: AdbBinaryTransport) {
         sendTouch = SendTouchUseCase(settings),
         updateSettings = UpdateSettingsUseCase(settings),
         setShowTouches = SetShowTouchesUseCase(devices),
+        captureScreenshot = CaptureScreenshotUseCase(screenshots),
+        copyScreenshot = CopyScreenshotUseCase(screenshots),
+        saveScreenshot = SaveScreenshotUseCase(screenshots, settings),
     )
 }

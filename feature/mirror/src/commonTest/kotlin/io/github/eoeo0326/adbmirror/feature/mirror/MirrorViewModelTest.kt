@@ -5,6 +5,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
+import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
@@ -12,8 +13,12 @@ import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 import io.github.eoeo0326.adbmirror.core.domain.repository.DeviceRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.MirrorRepository
+import io.github.eoeo0326.adbmirror.core.domain.repository.ScreenshotRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -97,6 +102,25 @@ class MirrorViewModelTest {
         }
     }
 
+    private var captureGate: CompletableDeferred<Unit>? = null
+    private var failCapture: String? = null
+    private var captures = 0
+    private val copiedShots = mutableListOf<Screenshot>()
+    private val savedShots = mutableListOf<Pair<Screenshot, String?>>()
+    private val screenshotRepo = object : ScreenshotRepository {
+        override suspend fun capture(serial: String): Screenshot {
+            captures++
+            captureGate?.await()
+            failCapture?.let { error(it) }
+            return Screenshot(serial, byteArrayOf(1))
+        }
+        override suspend fun copyToClipboard(screenshot: Screenshot) { copiedShots += screenshot }
+        override suspend fun save(screenshot: Screenshot, outputDir: String?): String {
+            savedShots += screenshot to outputDir
+            return "${outputDir ?: "~/Desktop"}/shot.png"
+        }
+    }
+
     private fun viewModel() = MirrorViewModel(
         device = device,
         getSettings = GetSettingsUseCase(settingsRepo),
@@ -105,6 +129,9 @@ class MirrorViewModelTest {
         sendTouch = SendTouchUseCase(settingsRepo),
         updateSettings = UpdateSettingsUseCase(settingsRepo),
         setShowTouches = SetShowTouchesUseCase(deviceRepo),
+        captureScreenshot = CaptureScreenshotUseCase(screenshotRepo),
+        copyScreenshot = CopyScreenshotUseCase(screenshotRepo),
+        saveScreenshot = SaveScreenshotUseCase(screenshotRepo, settingsRepo),
     )
 
     @BeforeTest fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -278,5 +305,68 @@ class MirrorViewModelTest {
         testScheduler.advanceUntilIdle()
         vm.shutdown()
         assertFalse(deviceShowTouches, "켜 둔 기기 설정을 원래 값으로 되돌려야 한다")
+    }
+
+    @Test
+    fun copyScreenshotCapturesFromDeviceAndReports() = runTest {
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.CopyScreenshot)
+        assertEquals("A", copiedShots.single().serial)
+        assertEquals(MirrorEffect.ShowMessage("스크린샷을 클립보드에 복사했습니다"), vm.effects.first())
+        assertFalse(vm.state.value.capturingScreenshot)
+    }
+
+    @Test
+    fun saveScreenshotUsesOutputDirAndReportsPath() = runTest {
+        settings.value = Settings(outputDir = "/shots")
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.SaveScreenshot)
+        assertEquals("/shots", savedShots.single().second)
+        assertEquals(MirrorEffect.ScreenshotSaved("/shots/shot.png"), vm.effects.first())
+    }
+
+    @Test
+    fun screenshotWorksWithoutMirroringSession() = runTest {
+        failStart = "scrcpy 서버에 연결하지 못했습니다"
+        val vm = viewModel()
+        vm.effects.first() // 연결 실패 알림
+        vm.onIntent(MirrorIntent.CopyScreenshot)
+        assertEquals(1, copiedShots.size)
+    }
+
+    @Test
+    fun screenshotIgnoresRepeatedRequestsWhileCapturing() = runTest {
+        val gate = CompletableDeferred<Unit>().also { captureGate = it }
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.SaveScreenshot)
+        assertTrue(vm.state.value.capturingScreenshot)
+        vm.onIntent(MirrorIntent.SaveScreenshot)
+        vm.onIntent(MirrorIntent.CopyScreenshot)
+        gate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+        assertEquals(1, captures)
+        assertEquals(1, savedShots.size)
+        assertEquals(emptyList(), copiedShots)
+        assertFalse(vm.state.value.capturingScreenshot)
+    }
+
+    @Test
+    fun screenshotFailureShowsErrorAndAllowsRetry() = runTest {
+        failCapture = "device offline"
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.CopyScreenshot)
+        assertEquals(MirrorEffect.Error("스크린샷 실패: device offline"), vm.effects.first())
+        assertFalse(vm.state.value.capturingScreenshot)
+
+        failCapture = null
+        vm.onIntent(MirrorIntent.CopyScreenshot)
+        assertEquals(1, copiedShots.size)
+    }
+
+    @Test
+    fun effectMessages() {
+        assertEquals("스크린샷을 저장했습니다: /a.png", MirrorEffect.ScreenshotSaved("/a.png").message())
+        assertEquals("x", MirrorEffect.Error("x").message())
+        assertNull(MirrorEffect.AskShowTouchesForRecording.message())
     }
 }

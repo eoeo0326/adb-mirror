@@ -17,6 +17,8 @@ data class MirrorState(
     val recording: RecordingState = RecordingState.Idle,
     val conversion: ConversionState = ConversionState.Idle,
     val statusMessage: String? = null,
+    /** 스크린샷을 받는 중. 연달아 눌러도 한 장씩만 받는다. */
+    val capturingScreenshot: Boolean = false,
 ) {
     /** 처음이거나, 끊긴 뒤 다시 연결할 수 있는 상태 */
     val canConnect: Boolean
@@ -77,6 +79,8 @@ sealed interface MirrorResult {
     data class ConversionFinished(val file: String) : MirrorResult
     data class ConversionFailed(val message: String) : MirrorResult
     data object ConversionCancelled : MirrorResult
+    data object ScreenshotStarted : MirrorResult
+    data object ScreenshotFinished : MirrorResult
     data class StatusShown(val message: String) : MirrorResult
     data object StatusCleared : MirrorResult
 }

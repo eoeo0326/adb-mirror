@@ -25,6 +25,7 @@ import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
+import java.awt.Desktop
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -44,6 +45,9 @@ private fun closeAllBlocking() = runBlocking {
 }
 
 fun main() {
+    // AWT가 뜨기 전에 정해야 한다. macOS에서 메뉴 막대를 화면 위에 붙이고 앱 메뉴 이름을 정한다.
+    System.setProperty("apple.laf.useScreenMenuBar", "true")
+    System.setProperty("apple.awt.application.name", "ADB Mirror")
     val transport = AdbBinaryTransport.locate()
     val graph = transport?.let(::AppGraph)
     // 창을 닫지 않고 종료 신호(SIGTERM·Ctrl+C)로 끝나도 서버·forward를 정리한다.
@@ -80,30 +84,37 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph) {
     }
     DevAutoOpen(listViewModel)
 
-    Window(
-        onCloseRequest = {
-            closeAllBlocking()
-            exitApplication()
-        },
-        title = "ADB Mirror",
-        state = rememberWindowState(size = DpSize(420.dp, 560.dp)),
-    ) {
+    val quit = {
+        closeAllBlocking()
+        exitApplication()
+    }
+    // macOS 앱 메뉴의 종료(⌘Q)도 창을 닫을 때와 같이 세션을 정리하고 끝낸다.
+    LaunchedEffect(Unit) {
+        if (isMac && Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
+            Desktop.getDesktop().setQuitHandler { _, response ->
+                closeAllBlocking()
+                response.performQuit()
+            }
+        }
+    }
+
+    Window(onCloseRequest = quit, title = "ADB Mirror", state = rememberWindowState(size = DpSize(420.dp, 560.dp))) {
+        DeviceListMenuBar(onQuit = quit)
         AppTheme { DeviceListRoute(listViewModel) }
     }
 
     for ((serial, holder) in openWindows) {
         key(serial) {
-            Window(
-                onCloseRequest = {
-                    openWindows.remove(serial)
+            val closeWindow = {
+                if (openWindows.remove(serial) != null) {
                     listViewModel.onIntent(DeviceListIntent.MirrorClosed(serial))
                     val job = scope.launch { holder.close() }
                     closingWindows[serial] = job
                     job.invokeOnCompletion { closingWindows.remove(serial, job) }
-                },
-                state = holder.windowState,
-                title = "ADB Mirror — ${holder.device.model ?: serial}",
-            ) {
+                }
+            }
+            Window(onCloseRequest = closeWindow, state = holder.windowState, title = "ADB Mirror — ${holder.device.model ?: serial}") {
+                MirrorMenuBar(holder, onCloseWindow = closeWindow, onQuit = quit)
                 FitWindowToVideo(holder)
                 AppTheme { MirrorRoute(holder.viewModel) }
             }
