@@ -8,6 +8,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
@@ -23,6 +24,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.concurrent.Volatile
 
@@ -38,6 +41,7 @@ class MirrorViewModel(
     private val stopMirroring: StopMirroringUseCase,
     private val sendTouch: SendTouchUseCase,
     private val updateSettings: UpdateSettingsUseCase,
+    private val setShowTouches: SetShowTouchesUseCase,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MirrorState(device))
     val state: StateFlow<MirrorState> = _state.asStateFlow()
@@ -55,8 +59,18 @@ class MirrorViewModel(
 
     @Volatile private var shuttingDown = false
 
+    /** 기기의 show_touches를 켜기 전 값. 우리가 켜 둔 동안에만 null이 아니다. */
+    private var originalShowTouches: Boolean? = null
+    private val showTouchesLock = Mutex()
+
     init {
-        viewModelScope.launch { getSettings().collect { reduce(MirrorResult.SettingsLoaded(it)) } }
+        viewModelScope.launch {
+            getSettings().collect { settings ->
+                val changed = settings.showTouches != _state.value.settings.showTouches
+                reduce(MirrorResult.SettingsLoaded(settings))
+                if (changed && _session.value != null) launch { syncShowTouches() }
+            }
+        }
         connect()
     }
 
@@ -67,6 +81,7 @@ class MirrorViewModel(
             is MirrorIntent.Touch -> touch(intent)
             MirrorIntent.ToggleViewOnly -> viewModelScope.launch { updateSettings { it.copy(viewOnly = !it.viewOnly) } }
             MirrorIntent.ToggleTouchEffect -> viewModelScope.launch { updateSettings { it.copy(touchEffect = !it.touchEffect) } }
+            MirrorIntent.ToggleShowTouches -> viewModelScope.launch { updateSettings { it.copy(showTouches = !it.showTouches) } }
             else -> _effects.trySend(MirrorEffect.ShowMessage("아직 준비 중인 기능입니다"))
         }
     }
@@ -99,6 +114,7 @@ class MirrorViewModel(
                     return@launch
                 }
                 _session.value = session
+                syncShowTouches()
                 started.complete(Unit)
                 session.events.collect { event ->
                     when (event) {
@@ -106,6 +122,7 @@ class MirrorViewModel(
                         is SessionEvent.VideoSizeChanged -> reduce(MirrorResult.VideoSizeChanged(event.size))
                         is SessionEvent.Ended -> {
                             _session.value = null
+                            withContext(NonCancellable) { syncShowTouches() }
                             reduce(MirrorResult.SessionEnded(event.error))
                             event.error?.let { _effects.trySend(MirrorEffect.Error(it)) }
                             sessionJob?.cancel()
@@ -135,6 +152,29 @@ class MirrorViewModel(
         pendingStart?.await()
         _session.value?.let { stopMirroring(it) }
         _session.value = null
+        syncShowTouches()
+    }
+
+    /**
+     * 기기의 show_touches를 설정·세션 상태에 맞춘다. 켜야 하면 원래 값을 기억해 두고 켜고,
+     * 아니면(설정 끔·세션 끝·창 닫힘) 기억해 둔 값으로 되돌린다. 여러 경로에서 불러도 한 번씩만 바뀐다.
+     */
+    private suspend fun syncShowTouches() = showTouchesLock.withLock {
+        val want = !shuttingDown && _session.value != null && _state.value.settings.showTouches
+        val serial = _state.value.device.serial
+        val original = originalShowTouches
+        try {
+            if (want && original == null) {
+                originalShowTouches = setShowTouches(serial, true)
+            } else if (!want && original != null) {
+                originalShowTouches = null // 복원이 실패해도(기기 분리 등) 다시 시도하지 않는다
+                setShowTouches(serial, original)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _effects.trySend(MirrorEffect.ShowMessage("기기 터치 표시를 바꾸지 못했습니다: ${e.message}"))
+        }
     }
 
     private fun reduce(result: MirrorResult) = _state.update { MirrorReducer.reduce(it, result) }
