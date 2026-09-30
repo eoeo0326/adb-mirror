@@ -10,6 +10,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
@@ -35,5 +36,6 @@ class AppGraph(transport: AdbBinaryTransport) {
         stopMirroring = StopMirroringUseCase(),
         sendTouch = SendTouchUseCase(settings),
         updateSettings = UpdateSettingsUseCase(settings),
+        setShowTouches = SetShowTouchesUseCase(devices),
     )
 }

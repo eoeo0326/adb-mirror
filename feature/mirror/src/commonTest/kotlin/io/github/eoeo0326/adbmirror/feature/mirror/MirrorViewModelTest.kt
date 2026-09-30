@@ -10,10 +10,12 @@ import io.github.eoeo0326.adbmirror.core.domain.model.Settings
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
+import io.github.eoeo0326.adbmirror.core.domain.repository.DeviceRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.MirrorRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -78,6 +81,17 @@ class MirrorViewModelTest {
         }
     }
 
+    /** 기기의 show_touches 값. 사용자가 원래 켜 두었을 수도 있다. */
+    private var deviceShowTouches = false
+    private val showTouchesCalls = mutableListOf<Boolean>()
+    private val deviceRepo = object : DeviceRepository {
+        override fun devices() = flowOf(listOf(device))
+        override suspend fun setShowTouches(serial: String, enabled: Boolean): Boolean {
+            showTouchesCalls += enabled
+            return deviceShowTouches.also { deviceShowTouches = enabled }
+        }
+    }
+
     private fun viewModel() = MirrorViewModel(
         device = device,
         getSettings = GetSettingsUseCase(settingsRepo),
@@ -85,6 +99,7 @@ class MirrorViewModelTest {
         stopMirroring = StopMirroringUseCase(),
         sendTouch = SendTouchUseCase(settingsRepo),
         updateSettings = UpdateSettingsUseCase(settingsRepo),
+        setShowTouches = SetShowTouchesUseCase(deviceRepo),
     )
 
     @BeforeTest fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -181,5 +196,67 @@ class MirrorViewModelTest {
         assertTrue(session.stopped)
         assertEquals(Connection.Idle, vm.state.value.connection)
         assertNull(vm.session.value)
+    }
+
+    @Test
+    fun showTouchesOffLeavesDeviceSettingAlone() = runTest {
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.Disconnect)
+        vm.shutdown()
+        assertEquals(emptyList(), showTouchesCalls)
+    }
+
+    @Test
+    fun showTouchesIsTurnedOnWhileConnectedAndRestoredOnDisconnect() = runTest {
+        settings.value = Settings(showTouches = true)
+        val vm = viewModel()
+        assertEquals(listOf(true), showTouchesCalls)
+        assertTrue(deviceShowTouches)
+
+        vm.onIntent(MirrorIntent.Disconnect)
+        assertEquals(listOf(true, false), showTouchesCalls)
+        assertFalse(deviceShowTouches)
+    }
+
+    @Test
+    fun showTouchesRestoresTheUsersOwnValue() = runTest {
+        deviceShowTouches = true // 사용자가 기기에서 직접 켜 둠
+        settings.value = Settings(showTouches = true)
+        val vm = viewModel()
+        vm.shutdown()
+        assertEquals(listOf(true, true), showTouchesCalls)
+        assertTrue(deviceShowTouches)
+    }
+
+    @Test
+    fun toggleShowTouchesAppliesImmediatelyAndOffRestores() = runTest {
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.ToggleShowTouches)
+        assertTrue(vm.state.value.settings.showTouches)
+        assertTrue(deviceShowTouches)
+
+        vm.onIntent(MirrorIntent.ToggleShowTouches)
+        assertFalse(deviceShowTouches)
+        assertEquals(listOf(true, false), showTouchesCalls)
+    }
+
+    @Test
+    fun showTouchesIsRestoredWhenSessionEndsByItself() = runTest {
+        settings.value = Settings(showTouches = true)
+        viewModel()
+        session.eventFlow.emit(SessionEvent.Ended("영상 스트림이 끊겼습니다"))
+        assertFalse(deviceShowTouches)
+    }
+
+    @Test
+    fun shutdownRestoresShowTouchesBeforeReturning() = runTest {
+        settings.value = Settings(showTouches = true)
+        val vm = viewModel()
+        vm.shutdown()
+        assertFalse(deviceShowTouches)
+        // 창을 닫은 뒤 설정이 바뀌어도 다시 켜지 않는다
+        settings.update { it.copy(showTouches = false) }
+        settings.update { it.copy(showTouches = true) }
+        assertEquals(listOf(true, false), showTouchesCalls)
     }
 }
