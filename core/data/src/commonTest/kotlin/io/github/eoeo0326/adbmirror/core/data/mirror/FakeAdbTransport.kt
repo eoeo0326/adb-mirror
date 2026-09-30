@@ -49,7 +49,8 @@ class FakeAdbTransport(private val streams: ArrayDeque<FakeStream> = ArrayDeque(
     override fun trackDevices(): Flow<List<AdbDevice>> = deviceUpdates
     override suspend fun push(serial: String, data: ByteArray, remotePath: String) { pushed += serial to remotePath }
     override suspend fun shell(serial: String, command: List<String>): String { shellCommands += command; return shellReply(command) }
-    override suspend fun execOut(serial: String, command: List<String>) = ByteArray(0)
+    var execOutReply: (List<String>) -> ByteArray = { ByteArray(0) }
+    override suspend fun execOut(serial: String, command: List<String>) = execOutReply(command)
     override suspend fun startProcess(serial: String, command: List<String>, onOutput: (String) -> Unit): RemoteProcess {
         commands += command
         return process
