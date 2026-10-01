@@ -1,4 +1,4 @@
-@file:OptIn(ExperimentalWasmJsInterop::class, ExperimentalComposeUiApi::class)
+@file:OptIn(ExperimentalWasmJsInterop::class)
 
 package io.github.eoeo0326.adbmirror.feature.mirror.video
 
@@ -18,24 +18,28 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.HtmlElementView
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
-import kotlinx.browser.document
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLElement
 
 /**
  * WebCodecs `VideoDecoder`가 H.264를 풀고, 나온 `VideoFrame`을 JS에서 바로 HTML canvas에 그린다(픽셀을 Wasm으로 옮기지 않음).
- * canvas는 Compose 화면 위에 겹친 HTML 요소라 포인터 이벤트를 받지 않게 하고, 그 아래 Compose 레이어가 터치를 받는다.
+ * canvas는 Compose 화면 **뒤**에 두고, Compose는 영상 영역만 투명하게 비워(BlendMode.Clear) 그 구멍으로 영상이 보이게 한다.
+ * 그래서 Snackbar·메뉴 같은 Compose 요소가 영상 위에 그려지고, 터치도 Compose가 그대로 받는다
+ * (HTML 요소를 위에 겹치면 Compose 요소가 그 아래에 깔리고 포인터 이벤트를 가로챈다).
  */
 @Composable
 actual fun VideoSurface(
@@ -45,12 +49,16 @@ actual fun VideoSurface(
     modifier: Modifier,
 ) {
     var fatal by remember(session) { mutableStateOf<String?>(null) }
-    val canvas = remember(session) {
-        (document.createElement("canvas") as HTMLElement).apply { setAttribute("style", "width:100%;height:100%;pointer-events:none;display:block") }
-    }
+    val canvas = remember(session) { createBackgroundCanvas() }
     val renderer = remember(session) { if (webCodecsSupported()) createRenderer(canvas) else null }
     val scope = rememberCoroutineScope()
-    DisposableEffect(renderer) { onDispose { renderer?.let(::closeRenderer) } }
+    val density = LocalDensity.current.density
+    DisposableEffect(canvas, renderer) {
+        onDispose {
+            renderer?.let(::closeRenderer)
+            canvas.remove()
+        }
+    }
     LaunchedEffect(session, renderer) {
         if (renderer == null) {
             fatal = "이 브라우저는 WebCodecs 영상 디코딩을 지원하지 않습니다"
@@ -75,8 +83,18 @@ actual fun VideoSurface(
 
     Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
         val area = if (videoSize != null) Modifier.aspectRatio(videoSize.width.toFloat() / videoSize.height) else Modifier.fillMaxSize()
-        Box(area) {
-            HtmlElementView(factory = { canvas }, modifier = Modifier.fillMaxSize())
+        Box(
+            area
+                .onGloballyPositioned { coordinates ->
+                    // Compose 화면은 페이지 (0, 0)부터 채운다(body margin 0). 픽셀을 CSS 픽셀로 바꿔 canvas를 그 자리에 둔다.
+                    val r = coordinates.boundsInWindow()
+                    placeCanvas(canvas, r.left / density, r.top / density, r.width / density, r.height / density)
+                }
+                .drawWithContent {
+                    drawRect(Color.Transparent, blendMode = BlendMode.Clear)
+                    drawContent()
+                },
+        ) {
             fatal?.let { Text(it, color = Color.White, modifier = Modifier.align(Alignment.Center).padding(16.dp)) }
             Box(
                 Modifier.matchParentSize().pointerInput(videoSize) {
@@ -158,6 +176,17 @@ internal fun avcCodecString(config: ByteArray): String? {
     }
     return null
 }
+
+/** Compose 화면 뒤(z-index -1)에 고정 위치로 둔 영상 canvas. 포인터 이벤트는 받지 않는다. */
+@JsFun(
+    """() => { const c = document.createElement('canvas');
+  c.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;z-index:-1;pointer-events:none;background:#000';
+  document.body.appendChild(c); return c; }""",
+)
+private external fun createBackgroundCanvas(): HTMLElement
+
+@JsFun("(c, x, y, w, h) => { c.style.left = x + 'px'; c.style.top = y + 'px'; c.style.width = w + 'px'; c.style.height = h + 'px'; }")
+private external fun placeCanvas(canvas: HTMLElement, x: Float, y: Float, width: Float, height: Float)
 
 @JsFun("() => typeof VideoDecoder !== 'undefined'")
 private external fun webCodecsSupported(): Boolean
