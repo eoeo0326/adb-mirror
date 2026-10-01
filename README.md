@@ -87,7 +87,11 @@ macOS 14 이하에서는 Finder에서 앱을 우클릭 → 열기로도 열 수 
 
 ### Web 앱
 
-Chrome·Edge 같은 Chromium 브라우저가 WebUSB로 기기에 직접 붙습니다. adb나 다른 프로그램을 설치하지 않아도 됩니다. 페이지는 https 또는 localhost에서 열어야 합니다.
+Chrome·Edge 같은 Chromium 브라우저가 WebUSB로 기기에 직접 붙습니다. adb나 다른 프로그램을 설치하지 않아도 됩니다.
+
+**바로 쓰기: https://eoeo0326.github.io/adb-mirror/** (main에 머지할 때마다 GitHub Pages에 다시 배포)
+
+직접 띄우려면 https 또는 localhost에서 열어야 합니다(WebUSB 제한).
 
 ```bash
 ./gradlew :composeApp:wasmJsBrowserDistribution   # composeApp/build/dist/wasmJs/productionExecutable/

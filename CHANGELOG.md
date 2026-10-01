@@ -6,6 +6,7 @@
 
 ### 추가
 - Web 앱(Chromium): WebUSB로 adb 없이 기기에 붙어 미러링(WebCodecs)·터치, 스크린샷 복사(클립보드)·저장(다운로드), MP4 녹화(OPFS에 쓰고 다운로드). WebUSB가 없는 브라우저에는 안내 화면
+- Web 앱을 GitHub Pages(https://eoeo0326.github.io/adb-mirror/)로 배포
 - 공통 ADB 와이어 프로토콜(CNXN·AUTH·스트림·sync)과 순수 Kotlin RSA 인증 서명. Web이 이것으로 adbd와 직접 말한다
 
 ## [0.5.0] - 2026-10-01
