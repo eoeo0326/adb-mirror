@@ -1,6 +1,8 @@
 package io.github.eoeo0326.adbmirror.core.data.mirror
 
+import io.github.eoeo0326.adbmirror.core.data.scrcpy.LaunchedServers
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyException
+import io.github.eoeo0326.adbmirror.core.data.scrcpy.TextStore
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ServerJar
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
@@ -95,5 +97,50 @@ class ScrcpyServerLauncherTest {
         val launcher = ScrcpyServerLauncher(transport, { jar }, retryDelayMs = 1, maxAttempts = 3)
         assertFailsWith<ScrcpyException> { launcher.launch("S1", MirrorOptions(720, 30, control = true)) }
         assertTrue(transport.process.stopped)
+    }
+
+    private class MemStore(var text: String? = null) : TextStore {
+        override suspend fun read() = text
+        override suspend fun write(text: String) { this.text = text }
+    }
+
+    @Test
+    fun launchedServerIsRecordedUntilStopped() = runTest {
+        val store = MemStore()
+        val transport = FakeAdbTransport(ArrayDeque(listOf(FakeStream.of(byteArrayOf(0)))))
+        val connection = ScrcpyServerLauncher(transport, { jar }, Random(1), retryDelayMs = 1, launched = LaunchedServers(store))
+            .launch("S1", MirrorOptions(720, 30, control = false))
+        val scid = transport.opened.first().removePrefix("scrcpy_")
+        assertEquals(scid, store.text, "띄운 서버를 기록한다")
+        connection.process.stop()
+        assertTrue(transport.process.stopped)
+        assertEquals("", store.text, "정상 종료하면 기록을 지운다")
+    }
+
+    @Test
+    fun leftoversFromPreviousRunAreKilledBeforeLaunch() = runTest {
+        val store = MemStore("0000beef\n1234abcd\nnot-a-scid")
+        val transport = FakeAdbTransport(ArrayDeque(listOf(FakeStream.of(byteArrayOf(0))))).apply {
+            shellReply = { error("exit 1") } // pkill이 못 찾으면 실패로 끝나도 계속한다
+        }
+        ScrcpyServerLauncher(transport, { jar }, Random(1), retryDelayMs = 1, launched = LaunchedServers(store))
+            .launch("S1", MirrorOptions(720, 30, control = false))
+        assertEquals(
+            listOf(listOf("pkill", "-f", "'scid=[0]000beef'"), listOf("pkill", "-f", "'scid=[1]234abcd'")),
+            transport.shellCommands,
+        )
+        assertEquals(transport.opened.first().removePrefix("scrcpy_"), store.text, "남은 기록은 지우고 이번 서버만 남긴다")
+    }
+
+    @Test
+    fun failedLaunchRemovesRecord() = runTest {
+        val store = MemStore()
+        val transport = FakeAdbTransport(ArrayDeque(List(3) { FakeStream.of(ByteArray(0)) }))
+        assertFailsWith<ScrcpyException> {
+            ScrcpyServerLauncher(transport, { jar }, retryDelayMs = 1, maxAttempts = 3, launched = LaunchedServers(store))
+                .launch("S1", MirrorOptions(720, 30, control = true))
+        }
+        assertTrue(transport.process.stopped)
+        assertEquals("", store.text)
     }
 }

@@ -36,25 +36,58 @@ class ScrcpyServerLauncher(
     private val retryDelayMs: Long = 100,
     private val maxAttempts: Int = 50,
     private val log: (String) -> Unit = {},
+    /** 정상 종료하지 못한 서버 기록. 있으면 새로 띄우기 전에 남은 서버를 정리한다. */
+    private val launched: LaunchedServers? = null,
 ) {
     suspend fun launch(serial: String, options: MirrorOptions): ScrcpyConnection {
+        killLeftovers(serial)
         val jar = jarSource.load()
         transport.push(serial, jar.bytes, DEVICE_PATH)
         val scid = random.nextInt(0, Int.MAX_VALUE).toString(16).padStart(8, '0')
-        val process = transport.startProcess(serial, serverCommand(jar.version, scid, options), log)
+        // 서버를 띄우기 전에 기록해, 띄운 직후 앱이 죽어도 다음 실행 때 정리할 수 있게 한다.
+        launched?.add(scid)
+        val process = try {
+            transport.startProcess(serial, serverCommand(jar.version, scid, options), log)
+        } catch (e: Throwable) {
+            withContext(NonCancellable) { launched?.remove(scid) }
+            throw e
+        }
+        val tracked = object : RemoteProcess {
+            override suspend fun awaitExit() = process.awaitExit()
+            override suspend fun stop() {
+                withContext(NonCancellable) {
+                    process.stop()
+                    launched?.remove(scid)
+                }
+            }
+        }
         var video: DeviceStream? = null
         try {
             val socketName = "scrcpy_$scid"
             video = connectVideo(serial, socketName)
             val control = if (options.control) transport.openLocalAbstract(serial, socketName) else null
-            return ScrcpyConnection(video, control, process)
+            return ScrcpyConnection(video, control, tracked)
         } catch (e: Throwable) {
             // 취소로 빠져나가는 경우에도 서버·소켓·forward를 남기지 않는다.
             withContext(NonCancellable) {
                 video?.close()
-                process.stop()
+                tracked.stop()
             }
             throw e
+        }
+    }
+
+    /**
+     * 앞선 실행이 끝내지 못한 서버를 이 기기에서 찾아 끝낸다. scid로만 찾으므로 다른 클라이언트가 띄운 서버는
+     * 건드리지 않는다. 다른 기기의 서버였으면 찾지 못하고 넘어간다(그 기록은 지운다).
+     */
+    private suspend fun killLeftovers(serial: String) {
+        val leftovers = launched?.takeAll().orEmpty()
+        for (scid in leftovers) {
+            // pkill은 찾지 못하면 1로 끝나 실패로 보이지만 정상이다. 패턴 첫 글자를 [x]로 감싸, 이 명령을 실행하는
+            // 셸 자신의 명령줄("pkill -f scid=[x]…")은 맞지 않게 한다(자기 셸을 죽이지 않음).
+            runCatching { transport.shell(serial, listOf("pkill", "-f", "'scid=[${scid.first()}]${scid.drop(1)}'")) }
+            log("남아 있던 scrcpy 서버 정리 시도: scid=$scid")
         }
     }
 
