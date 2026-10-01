@@ -6,6 +6,7 @@ import io.github.eoeo0326.adbmirror.core.adb.EndOfStreamException
 import io.github.eoeo0326.adbmirror.core.adb.SocketNotReadyException
 import io.github.eoeo0326.adbmirror.core.adb.RemoteProcess
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -45,7 +46,7 @@ class ScrcpyServerLauncher(
         transport.push(serial, jar.bytes, DEVICE_PATH)
         val scid = random.nextInt(0, Int.MAX_VALUE).toString(16).padStart(8, '0')
         // 서버를 띄우기 전에 기록해, 띄운 직후 앱이 죽어도 다음 실행 때 정리할 수 있게 한다.
-        launched?.add(scid)
+        launched?.add(serial, scid)
         val process = try {
             transport.startProcess(serial, serverCommand(jar.version, scid, options), log)
         } catch (e: Throwable) {
@@ -78,15 +79,20 @@ class ScrcpyServerLauncher(
     }
 
     /**
-     * 앞선 실행이 끝내지 못한 서버를 이 기기에서 찾아 끝낸다. scid로만 찾으므로 다른 클라이언트가 띄운 서버는
-     * 건드리지 않는다. 다른 기기의 서버였으면 찾지 못하고 넘어간다(그 기록은 지운다).
+     * 앞선 실행이 이 기기에 남긴 서버를 끝낸다. scid로만 찾으므로 다른 클라이언트가 띄운 서버는 건드리지 않는다.
+     * 정리에 실패해도 새 서버는 그대로 띄운다(scid가 달라 겹치지 않음).
      */
     private suspend fun killLeftovers(serial: String) {
-        val leftovers = launched?.takeAll().orEmpty()
+        val leftovers = launched?.takeLeftovers(serial).orEmpty()
         for (scid in leftovers) {
             // pkill은 찾지 못하면 1로 끝나 실패로 보이지만 정상이다. 패턴 첫 글자를 [x]로 감싸, 이 명령을 실행하는
             // 셸 자신의 명령줄("pkill -f scid=[x]…")은 맞지 않게 한다(자기 셸을 죽이지 않음).
-            runCatching { transport.shell(serial, listOf("pkill", "-f", "'scid=[${scid.first()}]${scid.drop(1)}'")) }
+            try {
+                transport.shell(serial, listOf("pkill", "-f", "'scid=[${scid.first()}]${scid.drop(1)}'"))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
             log("남아 있던 scrcpy 서버 정리 시도: scid=$scid")
         }
     }

@@ -111,25 +111,39 @@ class ScrcpyServerLauncherTest {
         val connection = ScrcpyServerLauncher(transport, { jar }, Random(1), retryDelayMs = 1, launched = LaunchedServers(store))
             .launch("S1", MirrorOptions(720, 30, control = false))
         val scid = transport.opened.first().removePrefix("scrcpy_")
-        assertEquals(scid, store.text, "띄운 서버를 기록한다")
+        assertEquals("S1 $scid", store.text, "띄운 서버를 기기와 함께 기록한다")
         connection.process.stop()
         assertTrue(transport.process.stopped)
         assertEquals("", store.text, "정상 종료하면 기록을 지운다")
     }
 
     @Test
-    fun leftoversFromPreviousRunAreKilledBeforeLaunch() = runTest {
-        val store = MemStore("0000beef\n1234abcd\nnot-a-scid")
+    fun leftoversOnThisDeviceAreKilledBeforeLaunch() = runTest {
+        // 무선 기기는 포트가 바뀌어도 같은 호스트면 같은 기기로 본다. 다른 기기의 기록은 남긴다.
+        val store = MemStore("192.168.0.9 0000beef\n192.168.0.9 1234abcd\nS2 5555aaaa\nnot-a-record")
         val transport = FakeAdbTransport(ArrayDeque(listOf(FakeStream.of(byteArrayOf(0))))).apply {
             shellReply = { error("exit 1") } // pkill이 못 찾으면 실패로 끝나도 계속한다
         }
         ScrcpyServerLauncher(transport, { jar }, Random(1), retryDelayMs = 1, launched = LaunchedServers(store))
-            .launch("S1", MirrorOptions(720, 30, control = false))
+            .launch("192.168.0.9:41234", MirrorOptions(720, 30, control = false))
         assertEquals(
             listOf(listOf("pkill", "-f", "'scid=[0]000beef'"), listOf("pkill", "-f", "'scid=[1]234abcd'")),
             transport.shellCommands,
         )
-        assertEquals(transport.opened.first().removePrefix("scrcpy_"), store.text, "남은 기록은 지우고 이번 서버만 남긴다")
+        val scid = transport.opened.first().removePrefix("scrcpy_")
+        assertEquals("S2 5555aaaa\n192.168.0.9 $scid", store.text, "이 기기의 남은 기록만 지운다")
+    }
+
+    @Test
+    fun runningSessionOfThisProcessIsNotKilled() = runTest {
+        val store = MemStore()
+        val launched = LaunchedServers(store)
+        val transport = FakeAdbTransport(ArrayDeque(List(2) { FakeStream.of(byteArrayOf(0)) }))
+        val launcher = ScrcpyServerLauncher(transport, { jar }, Random(1), retryDelayMs = 1, launched = launched)
+        launcher.launch("S1", MirrorOptions(720, 30, control = false))
+        launcher.launch("S1", MirrorOptions(720, 30, control = false))
+        assertEquals(emptyList(), transport.shellCommands, "실행 중인 세션은 남은 서버가 아니다")
+        assertEquals(2, store.text!!.lines().size)
     }
 
     @Test
