@@ -29,6 +29,13 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
         }
+        // Desktop(jvm)과 Android가 함께 쓰는 java.io 기반 코드(녹화 파일 쓰기 등).
+        val jvmSharedMain by creating { dependsOn(commonMain.get()) }
+        jvmMain.get().dependsOn(jvmSharedMain)
+        androidMain.get().dependsOn(jvmSharedMain)
+        androidMain.dependencies {
+            implementation(libs.androidx.core) // FileProvider(스크린샷 클립보드)
+        }
         jvmMain.dependencies {
             // 녹화 파일 디코딩(avformat·avcodec)과 WebP 프레임 인코딩(libwebp). 빌드하는 OS 것만 넣는다.
             implementation(libs.bytedeco.ffmpeg)

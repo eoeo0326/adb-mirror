@@ -70,7 +70,7 @@ fun MirrorEffect.message(): String? = when (this) {
     is MirrorEffect.ShowMessage -> message
     is MirrorEffect.Error -> message
     is MirrorEffect.ScreenshotSaved -> "스크린샷을 저장했습니다: $path"
-    is MirrorEffect.RecordingSaved -> "녹화를 저장했습니다: " + files.first() + if (files.size > 1) " 외 ${files.size - 1}개(회전)" else ""
+    is MirrorEffect.RecordingSaved -> "녹화를 저장했습니다: " + locations.first() + if (locations.size > 1) " 외 ${locations.size - 1}개(회전)" else ""
     is MirrorEffect.ConversionDone -> "변환을 마쳤습니다: $file"
     MirrorEffect.AskShowTouchesForRecording -> null
 }

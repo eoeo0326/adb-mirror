@@ -3,8 +3,12 @@ package io.github.eoeo0326.adbmirror.core.domain.model
 /** 기기 원본 해상도 PNG 스크린샷. */
 class Screenshot(val serial: String, val png: ByteArray)
 
-/** 끝난 녹화. 녹화 중 회전하면 파일이 여러 개(`_part2`, `_part3` …)가 된다. */
-data class Recording(val serial: String, val files: List<String>, val durationMs: Long)
+/**
+ * 끝난 녹화. 녹화 중 회전하면 파일이 여러 개(`_part2`, `_part3` …)가 된다.
+ * [files]는 변환에 넘기는 녹화 파일, [locations]는 사용자에게 보여줄 저장 위치(같은 순서).
+ * Android는 앱 캐시의 파일을 변환하고, 사용자에게는 MediaStore에 올린 위치를 보여준다.
+ */
+data class Recording(val serial: String, val files: List<String>, val durationMs: Long, val locations: List<String> = files)
 
 enum class AnimatedFormat { Gif, WebP }
 
