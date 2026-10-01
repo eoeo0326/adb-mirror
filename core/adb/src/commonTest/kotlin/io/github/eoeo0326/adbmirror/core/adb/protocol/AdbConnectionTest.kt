@@ -47,6 +47,7 @@ class AdbConnectionTest {
             var nextId = 100
             val syncBuffers = mutableMapOf<Int, ByteArray>()
             val remoteOf = mutableMapOf<Int, Int>()
+            val closeOnWrite = mutableSetOf<Int>()
             suspend fun send(cmd: Int, a0: Int, a1: Int, p: ByteArray = ByteArray(0)) = io.write(AdbMessage(cmd, a0, a1, p).encode())
             while (true) {
                 val m = try { AdbConnection.readMessage(io) } catch (_: EndOfStreamException) { break }
@@ -79,10 +80,16 @@ class AdbConnectionTest {
                             send(AdbMessage.CLSE, id, local)
                         } else if (service == "sync:") {
                             syncBuffers[id] = ByteArray(0)
+                        } else if (service == "close-on-write:") {
+                            closeOnWrite += id
                         }
                     }
                     AdbMessage.WRTE -> {
                         val id = m.arg1
+                        if (id in closeOnWrite) {
+                            send(AdbMessage.CLSE, id, m.arg0) // OKAY 없이 닫는다
+                            continue
+                        }
                         send(AdbMessage.OKAY, id, m.arg0)
                         val buf = (syncBuffers[id] ?: continue) + m.payload
                         syncBuffers[id] = buf
@@ -172,6 +179,16 @@ class AdbConnectionTest {
         assertFailsWith<SocketNotReadyException> { c.open("localabstract:scrcpy_1") }
         assertFailsWith<AdbException> { c.open("localabstract:scrcpy_1") }
         assertEquals("hi\n", c.shell("echo hi"), "거절 뒤에도 연결은 쓸 수 있다")
+    }
+
+    @Test
+    fun writeFailsInsteadOfHangingWhenDeviceClosesStream() = runTest {
+        val (host, _) = setUp()
+        val c = AdbConnection.connect(host, key, "me@test", backgroundScope)
+        val stream = c.open("close-on-write:")
+        assertFailsWith<EndOfStreamException> { stream.write(ByteArray(10_000)) }
+        assertFailsWith<EndOfStreamException> { stream.write(ByteArray(1)) }
+        assertEquals("hi\n", c.shell("echo hi"))
     }
 
     private fun hex(s: String) = ByteArray(s.length / 2) { s.substring(2 * it, 2 * it + 2).toInt(16).toByte() }

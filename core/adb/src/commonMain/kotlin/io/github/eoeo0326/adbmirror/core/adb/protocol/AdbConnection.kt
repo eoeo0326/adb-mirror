@@ -169,22 +169,25 @@ class AdbConnection private constructor(
     inner class AdbStream internal constructor(private val localId: Int, private val remoteId: Int) : ByteSource, ByteSink {
         private val incoming = Channel<ByteArray>(Channel.UNLIMITED)
         private var buffer = ByteArray(0)
-        private var ack: CompletableDeferred<Unit>? = null
         private val writeOne = Mutex()
+
+        /** [closed]·[ack]는 읽기 루프와 쓰는 코루틴이 함께 보므로 이 락 안에서만 바꾼다. */
+        private val state = Mutex()
+        private var ack: CompletableDeferred<Unit>? = null
         private var closed = false
 
         internal fun received(bytes: ByteArray) {
             incoming.trySend(bytes)
         }
 
-        internal fun acknowledged() {
-            ack?.complete(Unit)
-        }
+        internal suspend fun acknowledged() = state.withLock { ack?.complete(Unit) }
 
-        internal fun closedByDevice() {
-            closed = true
+        internal suspend fun closedByDevice() {
+            state.withLock {
+                closed = true
+                ack?.completeExceptionally(EndOfStreamException())
+            }
             incoming.close()
-            ack?.completeExceptionally(EndOfStreamException())
         }
 
         /** 다음에 받은 덩어리. 스트림이 끝났으면 null. */
@@ -204,9 +207,12 @@ class AdbConnection private constructor(
         override suspend fun write(bytes: ByteArray) = writeOne.withLock {
             var offset = 0
             while (offset < bytes.size) {
-                if (closed) throw EndOfStreamException()
                 val end = minOf(offset + maxPayload, bytes.size)
-                val waiting = CompletableDeferred<Unit>().also { ack = it }
+                // 닫혔는지 확인과 ack 등록을 한 번에 한다. 그 사이에 닫히면 기다릴 OKAY가 영영 오지 않는다.
+                val waiting = state.withLock {
+                    if (closed) throw EndOfStreamException()
+                    CompletableDeferred<Unit>().also { ack = it }
+                }
                 send(AdbMessage(AdbMessage.WRTE, localId, remoteId, bytes.copyOfRange(offset, end)))
                 waiting.await()
                 offset = end
