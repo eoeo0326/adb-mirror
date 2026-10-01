@@ -130,6 +130,9 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$app"
           fi
           codesign -dv "$app" 2>&1 | grep -E 'Signature|Authority|TeamIdentifier|not signed' || true
+          # macOS 26 이상용 아이콘(Assets.car)과 그 이름이 번들에 들어갔는지 본다.
+          test -f "$app/Contents/Resources/Assets.car"
+          test "$(plutil -extract CFBundleIconName raw "$app/Contents/Info.plist")" = AppIcon
 
       - name: jpackage 로그(실패 시)
         if: failure()
