@@ -31,13 +31,15 @@ class WirelessActions(
     val known: GetKnownWirelessDevicesUseCase,
     /** mDNS 찾기. 지원하지 않으면 null. */
     val discover: DiscoverWirelessServicesUseCase? = null,
+    /** 알림 답장으로 페어링 코드를 받을 수 있으면 true([DeviceListEffect.StartNotificationPairing]을 처리해야 함). */
+    val notificationPairing: Boolean = false,
 )
 
 class DeviceListViewModel(
     getDevices: GetDevicesUseCase,
     private val wireless: WirelessActions? = null,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(DeviceListState(wireless = wireless?.let { WirelessForm() }))
+    private val _state = MutableStateFlow(DeviceListState(wireless = wireless?.let { WirelessForm(canPairByNotification = it.notificationPairing) }))
     val state: StateFlow<DeviceListState> = _state.asStateFlow()
 
     private val _effects = Channel<DeviceListEffect>(Channel.BUFFERED)
@@ -84,6 +86,8 @@ class DeviceListViewModel(
             }
             is DeviceListIntent.Disconnect -> wireless?.let { w -> viewModelScope.launch { runCatching { w.disconnect(intent.serial) } } }
             is DeviceListIntent.UseService -> useService(intent.service)
+            DeviceListIntent.PairByNotification ->
+                if (wireless?.notificationPairing == true) _effects.trySend(DeviceListEffect.StartNotificationPairing)
         }
     }
 

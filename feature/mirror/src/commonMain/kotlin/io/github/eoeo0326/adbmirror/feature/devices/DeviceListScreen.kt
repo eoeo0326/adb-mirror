@@ -111,10 +111,19 @@ private fun WirelessCard(form: WirelessForm, onIntent: (DeviceListIntent) -> Uni
         Text("무선 기기 추가", fontWeight = FontWeight.Medium)
         Text(
             "기기에서 설정 > 개발자 옵션 > 무선 디버깅을 켜세요. 처음 한 번은 \"페어링 코드로 기기 페어링\"의 값으로 페어링하고, 그다음부터는 무선 디버깅 화면의 IP 주소·포트로 연결합니다. " +
-                "이 폰 자신을 페어링할 때는 페어링 창이 닫히지 않도록 이 앱을 팝업 화면이나 화면 분할로 띄우세요.",
+                if (form.canPairByNotification) {
+                    "이 폰 자신은 \"알림으로 이 폰 페어링\"을 누른 뒤, 설정의 페어링 창에 나온 코드를 알림에 답장으로 입력하세요."
+                } else {
+                    "이 폰 자신을 페어링할 때는 페어링 창이 닫히지 않도록 이 앱을 팝업 화면이나 화면 분할로 띄우세요."
+                },
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,
         )
+        if (form.canPairByNotification) {
+            OutlinedButton(onClick = { onIntent(DeviceListIntent.PairByNotification) }, enabled = !form.busy, modifier = Modifier.fillMaxWidth()) {
+                Text("알림으로 이 폰 페어링")
+            }
+        }
         if (form.found.isNotEmpty()) FoundServices(form, onIntent)
         Field("IP 주소", form.host, KeyboardType.Uri, !form.busy) { edit(form.copy(host = it)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

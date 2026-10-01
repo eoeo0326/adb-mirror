@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -64,7 +65,7 @@ class WirelessDeviceListTest {
         override fun services() = services
     }
 
-    private fun vm(withWireless: Boolean = true, withDiscovery: Boolean = false) = DeviceListViewModel(
+    private fun vm(withWireless: Boolean = true, withDiscovery: Boolean = false, notificationPairing: Boolean = false) = DeviceListViewModel(
         GetDevicesUseCase(devices),
         if (withWireless) {
             WirelessActions(
@@ -73,6 +74,7 @@ class WirelessDeviceListTest {
                 DisconnectWirelessDeviceUseCase(wireless),
                 GetKnownWirelessDevicesUseCase(wireless),
                 if (withDiscovery) DiscoverWirelessServicesUseCase(discovery) else null,
+                notificationPairing,
             )
         } else {
             null
@@ -189,5 +191,16 @@ class WirelessDeviceListTest {
         assertEquals(listOf("connect 192.168.0.12:45009"), calls)
         services.value = listOf(connect("192.168.0.12", 45009), pairing("192.168.0.12", 41234))
         assertEquals(listOf("connect 192.168.0.12:45009"), calls, "이미 연결된 기기는 다시 시도하지 않는다")
+    }
+
+    @Test
+    fun notificationPairingOnlyWhenSupported() = runTest {
+        assertFalse(vm().state.value.wireless!!.canPairByNotification)
+        val vm = vm(notificationPairing = true)
+        assertTrue(vm.state.value.wireless!!.canPairByNotification)
+        vm.onIntent(DeviceListIntent.EditWireless(WirelessForm(host = "h")))
+        assertTrue(vm.state.value.wireless!!.canPairByNotification, "입력을 고쳐도 유지")
+        vm.onIntent(DeviceListIntent.PairByNotification)
+        assertEquals(DeviceListEffect.StartNotificationPairing, vm.effects.first())
     }
 }

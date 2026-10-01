@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 무선 디버깅 기기에 TCP로 붙는다(페어링·ADB 연결) -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 이 폰 자신을 페어링할 때 코드를 알림 답장으로 받는다(Android 13+ 런타임 권한) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name="io.github.eoeo0326.adbmirror.AdbMirrorApplication"
@@ -16,6 +18,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name="io.github.eoeo0326.adbmirror.PairingCodeReceiver"
+            android:exported="false" />
         <!-- 스크린샷을 클립보드에 올릴 때 캐시의 PNG를 붙여 넣는 앱에 건넨다 -->
         <provider
             android:name="androidx.core.content.FileProvider"
