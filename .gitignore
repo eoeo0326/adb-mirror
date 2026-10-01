@@ -1,7 +1,4 @@
-.build/
-.swiftpm/
 .DS_Store
-macos-swift/Sources/adb-mirror/Resources/scrcpy-server
 __pycache__/
 
 # Gradle / Kotlin

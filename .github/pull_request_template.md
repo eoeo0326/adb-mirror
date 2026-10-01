@@ -39,7 +39,7 @@ Closes #이슈번호
 
 | 명령·입력 | 기대 | 결과 |
 |---|---|---|
-| `./gradlew allTests` / `cd macos-swift && swift build -c release` | 통과 |  |
+| `./gradlew allTests` | 통과 |  |
 
 </details>
 
