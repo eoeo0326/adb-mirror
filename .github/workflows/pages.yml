@@ -1,0 +1,46 @@
+name: Pages
+
+# main에 머지할 때마다 웹앱(wasmJs)을 빌드해 GitHub Pages(https://eoeo0326.github.io/adb-mirror/)에 배포한다.
+# WebUSB는 https 또는 localhost에서만 동작하므로, 팀원은 이 주소를 Chrome·Edge로 열면 된다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 배포는 하나씩. 진행 중인 배포는 끊지 않는다(새 커밋이 뒤이어 배포한다).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 웹앱 빌드
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v5
+      - run: ./gradlew :composeApp:wasmJsBrowserDistribution
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: composeApp/build/dist/wasmJs/productionExecutable
+
+  deploy:
+    name: Pages 배포
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
