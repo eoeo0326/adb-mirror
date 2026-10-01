@@ -28,3 +28,12 @@ kotlin {
         }
     }
 }
+
+// 실기기 확인(AdbConnectionDeviceTest): -Padbmirror.tcp=<ip>:5555
+tasks.withType<Test>().configureEach {
+    systemProperty("adbmirror.tcp", providers.gradleProperty("adbmirror.tcp").getOrElse(""))
+    systemProperty(
+        "adbmirror.tcpKey",
+        providers.gradleProperty("adbmirror.tcpKey").getOrElse(layout.buildDirectory.file("adb-test-key").get().asFile.absolutePath),
+    )
+}
