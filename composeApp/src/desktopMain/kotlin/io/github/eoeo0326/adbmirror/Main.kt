@@ -66,7 +66,7 @@ fun main() {
     val location = SettingsLocation.resolve()
     val settings = PropertiesSettingsRepository(location.settingsFile)
     val transport = AdbBinaryTransport.locate(settings.settings.value.adbPath)
-    val graph = transport?.let { AppGraph(it, settings) }
+    val graph = transport?.let { AppGraph(it, settings, location.dir) }
     val platform = SettingsPlatform(
         storageDescription = "설정 파일: ${location.settingsFile.path}" + if (location.portable) " (포터블)" else "",
         defaultOutputDescription = "기본 위치(${DesktopScreenshotSink().defaultDir().path})",

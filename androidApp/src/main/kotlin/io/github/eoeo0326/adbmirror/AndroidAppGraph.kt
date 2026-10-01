@@ -6,6 +6,7 @@ import io.github.eoeo0326.adbmirror.core.data.device.DeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.device.WirelessDeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ClasspathServerJarSource
+import io.github.eoeo0326.adbmirror.core.data.scrcpy.LaunchedServers
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotSink
@@ -55,7 +56,11 @@ class AndroidAppGraph(privateDir: File) {
     private val wireless = WirelessDeviceRepositoryImpl(transport)
     private val screenshots = ScreenshotRepositoryImpl(transport, UnsupportedScreenshotSink)
     private val recordings = UnsupportedRecordingRepository
-    private val mirror = MirrorRepositoryImpl(ScrcpyServerLauncher(transport, ClasspathServerJarSource, log = { android.util.Log.i("adb-mirror", it) }), scope)
+    private val launched = LaunchedServers(FileTextStore(File(privateDir, "launched-servers.txt")))
+    private val mirror = MirrorRepositoryImpl(
+        ScrcpyServerLauncher(transport, ClasspathServerJarSource, log = { android.util.Log.i("adb-mirror", it) }, launched = launched),
+        scope,
+    )
 
     fun deviceListViewModel() = DeviceListViewModel(
         GetDevicesUseCase(devices),
