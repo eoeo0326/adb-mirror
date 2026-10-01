@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.core.domain
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessEndpoint
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessPairing
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessReconnect
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.repository.WirelessDeviceRepository
@@ -12,6 +13,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 
 class WirelessUseCaseTest {
     private val calls = mutableListOf<String>()
@@ -49,5 +51,14 @@ class WirelessUseCaseTest {
         )
         val targets = WirelessReconnect.targets(known, services, connectedSerials = setOf("10.0.0.2:39999", "R3CM90"), tried = setOf(WirelessEndpoint("10.0.0.3", 40003)))
         assertEquals(listOf(WirelessEndpoint("10.0.0.1", 45000)), targets)
+    }
+
+    @Test
+    fun pairingPrefersThisDeviceThenTheOnlyOne() {
+        fun p(host: String) = WirelessService(WirelessService.Kind.Pairing, host, host, 41000)
+        val connect = WirelessService(WirelessService.Kind.Connect, "c", "10.0.0.5", 40000)
+        assertEquals(p("10.0.0.5"), WirelessPairing.choose(listOf(p("10.0.0.7"), p("10.0.0.5"), connect), setOf("10.0.0.5")))
+        assertEquals(p("10.0.0.7"), WirelessPairing.choose(listOf(p("10.0.0.7"), connect), setOf("10.0.0.5")))
+        assertNull(WirelessPairing.choose(listOf(p("10.0.0.7"), p("10.0.0.8")), setOf("10.0.0.5")), "어느 것인지 모르면 고르지 않는다")
     }
 }

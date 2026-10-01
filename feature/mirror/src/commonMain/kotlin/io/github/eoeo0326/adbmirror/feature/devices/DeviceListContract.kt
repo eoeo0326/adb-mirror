@@ -33,6 +33,8 @@ data class WirelessForm(
     val failed: Boolean = false,
     /** mDNS로 찾은 무선 디버깅 서비스. 찾기를 지원하지 않으면 늘 비어 있다. */
     val found: List<WirelessService> = emptyList(),
+    /** 알림 답장으로 페어링 코드를 받을 수 있는지(Android: 이 폰 자신을 페어링할 때 설정 앱을 떠나지 않게). */
+    val canPairByNotification: Boolean = false,
 ) {
     /**
      * 찾은 페어링 서비스로 비어 있는 페어링 칸을 채운다. 페어링 서비스는 누군가 "페어링 코드로 기기 페어링" 창을
@@ -57,6 +59,8 @@ sealed interface DeviceListIntent {
     data class Disconnect(val serial: String) : DeviceListIntent
     /** 찾은 서비스를 고른다. 페어링 서비스는 주소·포트를 채우고, 연결 서비스는 채운 뒤 바로 연결한다. */
     data class UseService(val service: WirelessService) : DeviceListIntent
+    /** 알림으로 페어링 코드를 받기 시작한다(플랫폼이 알림을 띄우고 설정 앱을 연다). */
+    data object PairByNotification : DeviceListIntent
 }
 
 sealed interface DeviceListResult {
@@ -73,6 +77,9 @@ sealed interface DeviceListResult {
 sealed interface DeviceListEffect {
     /** 이 기기의 미러링 창을 열거나 앞으로 가져온다. */
     data class OpenMirror(val device: Device) : DeviceListEffect
+
+    /** 페어링 코드를 받을 알림을 띄우고 기기의 개발자 옵션을 연다. */
+    data object StartNotificationPairing : DeviceListEffect
 }
 
 object DeviceListReducer {
@@ -88,7 +95,7 @@ object DeviceListReducer {
         is DeviceListResult.Closed -> state.copy(openSerials = state.openSerials - result.serial)
         // 입력을 고치면 지난 결과 문구는 지운다. 시도 중에는 입력을 바꾸지 않는다.
         is DeviceListResult.WirelessEdited ->
-            state.wireless?.takeIf { !it.busy }?.let { state.copy(wireless = result.form.copy(busy = false, message = null, failed = false, found = it.found)) } ?: state
+            state.wireless?.takeIf { !it.busy }?.let { state.copy(wireless = result.form.copy(busy = false, message = null, failed = false, found = it.found, canPairByNotification = it.canPairByNotification)) } ?: state
         is DeviceListResult.WirelessStarted -> state.copy(wireless = state.wireless?.copy(busy = true, message = result.message, failed = false))
         is DeviceListResult.WirelessFinished -> state.copy(wireless = state.wireless?.copy(busy = false, message = result.message, failed = result.failed))
         is DeviceListResult.ServicesFound -> state.copy(wireless = state.wireless?.copy(found = result.services)?.autofilled())

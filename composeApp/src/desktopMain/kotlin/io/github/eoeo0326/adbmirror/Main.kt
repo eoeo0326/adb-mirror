@@ -110,6 +110,8 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                         openWindows[serial] = MirrorWindowHolder(effect.device, graph, state)
                     }
                 }
+                // Desktop은 무선 기기 추가를 지원하지 않아 오지 않는다.
+                DeviceListEffect.StartNotificationPairing -> Unit
             }
         }
     }

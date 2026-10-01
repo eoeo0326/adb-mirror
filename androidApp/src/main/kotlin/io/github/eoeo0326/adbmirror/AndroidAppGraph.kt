@@ -8,6 +8,7 @@ import io.github.eoeo0326.adbmirror.core.data.conversion.BitmapWebpFrameEncoder
 import io.github.eoeo0326.adbmirror.core.data.conversion.MediaCodecVideoFrameSource
 import io.github.eoeo0326.adbmirror.core.data.device.DeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.device.NsdWirelessDiscovery
+import io.github.eoeo0326.adbmirror.core.data.device.SharedWirelessDiscovery
 import io.github.eoeo0326.adbmirror.core.data.device.WirelessDeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.recording.FileRecordingRepository
@@ -53,12 +54,13 @@ import java.io.File
  * [privateDir]는 백업되지 않는 앱 저장소(adb 키·남은 서버 기록·연결했던 기기).
  */
 class AndroidAppGraph(context: Context, privateDir: File) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val transport = KadbTransport(KadbKeyStore(File(privateDir, "adb")))
     private val settings = InMemorySettingsRepository()
     private val devices = DeviceRepositoryImpl(transport)
     private val wireless = WirelessDeviceRepositoryImpl(transport, FileTextStore(File(privateDir, "known-devices.txt")))
-    private val discovery = NsdWirelessDiscovery(context)
+    private val discovery = SharedWirelessDiscovery(NsdWirelessDiscovery(context), scope)
+    val notificationPairing = NotificationPairing(context, scope, discovery, PairDeviceUseCase(wireless), ConnectWirelessDeviceUseCase(wireless))
     private val screenshots = ScreenshotRepositoryImpl(transport, AndroidScreenshotSink(context, "${context.packageName}.files"))
     private val recordings = FileRecordingRepository(
         scope,
@@ -79,6 +81,7 @@ class AndroidAppGraph(context: Context, privateDir: File) {
             DisconnectWirelessDeviceUseCase(wireless),
             GetKnownWirelessDevicesUseCase(wireless),
             DiscoverWirelessServicesUseCase(discovery),
+            notificationPairing = true,
         ),
     )
 

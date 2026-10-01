@@ -1,9 +1,19 @@
 package io.github.eoeo0326.adbmirror
 
+import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.runtime.Composable
@@ -14,6 +24,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
@@ -52,6 +65,10 @@ private fun AndroidApp(graph: AndroidAppGraph) {
     val listViewModel = remember { graph.deviceListViewModel() }
     var mirror by remember { mutableStateOf<MirrorHolder?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) startNotificationPairing(context, graph) else Toast.makeText(context, "알림 권한이 있어야 알림으로 페어링 코드를 받을 수 있습니다", Toast.LENGTH_LONG).show()
+    }
     LaunchedEffect(listViewModel) {
         listViewModel.effects.collect { effect ->
             when (effect) {
@@ -59,6 +76,14 @@ private fun AndroidApp(graph: AndroidAppGraph) {
                     mirror?.let { old -> scope.launch { old.close() } }
                     mirror = MirrorHolder(effect.device, graph)
                 }
+                DeviceListEffect.StartNotificationPairing ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        startNotificationPairing(context, graph)
+                    }
             }
         }
     }
@@ -72,5 +97,19 @@ private fun AndroidApp(graph: AndroidAppGraph) {
             scope.launch { current.close() }
         }
         MirrorRoute(current.viewModel, Modifier.fillMaxSize().safeDrawingPadding())
+    }
+}
+
+/** 페어링 코드를 받을 알림을 띄우고 개발자 옵션을 연다. 사용자는 거기서 무선 디버깅 > 페어링 창으로 간다. */
+private fun startNotificationPairing(context: Context, graph: AndroidAppGraph) {
+    if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+        Toast.makeText(context, "이 앱의 알림이 꺼져 있습니다. 설정에서 알림을 켜세요", Toast.LENGTH_LONG).show()
+        return
+    }
+    graph.notificationPairing.start()
+    try {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, "설정 > 개발자 옵션 > 무선 디버깅을 여세요", Toast.LENGTH_LONG).show()
     }
 }

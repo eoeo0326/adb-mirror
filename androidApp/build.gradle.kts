@@ -26,6 +26,7 @@ dependencies {
     implementation(projects.core.adb)
     implementation(projects.core.domain)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.core) // 알림(NotificationCompat·RemoteInput)
     implementation(libs.compose.foundation)
     implementation(libs.compose.runtime)
     implementation(libs.compose.ui)

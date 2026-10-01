@@ -33,3 +33,12 @@ object WirelessReconnect {
         }.filter { it !in tried }
     }
 }
+
+/** 알림 등으로 받은 페어링 코드를 쓸 서비스를 고른다. */
+object WirelessPairing {
+    /** 이 기기 주소([localHosts])의 페어링 서비스를 먼저, 없으면 페어링 서비스가 하나뿐일 때 그것. */
+    fun choose(services: List<WirelessService>, localHosts: Set<String>): WirelessService? {
+        val pairing = services.filter { it.kind == WirelessService.Kind.Pairing }
+        return pairing.firstOrNull { it.host in localHosts } ?: pairing.singleOrNull()
+    }
+}
