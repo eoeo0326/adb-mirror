@@ -166,7 +166,7 @@ class AdbConnection private constructor(
         ended.complete(Unit)
     }
 
-    private suspend fun send(message: AdbMessage) = writeLock.withLock { channel.write(message.encode()) }
+    private suspend fun send(message: AdbMessage) = writeLock.withLock { channel.writeMessage(message) }
 
     private class OpenRefused : Exception()
 
@@ -239,7 +239,7 @@ class AdbConnection private constructor(
 
         /**
          * CNXN을 보내고 AUTH를 마친다. 먼저 토큰에 서명하고, 기기가 그 키를 모르면(토큰을 다시 보냄) 공개키를 보낸다.
-         * 그러면 기기에 "USB 디버깅을 허용하시겠습니까?" 창이 뜨고 [onWaitingForUser]가 불린다. 허용할 때까지 기다리므로
+         * 공개키를 보내고 나면 [onWaitingForUser]가 불리고, 기기에 "USB 디버깅을 허용하시겠습니까?" 창이 뜬다. 허용할 때까지 기다리므로
          * 호출하는 쪽이 시간 제한을 둔다.
          */
         suspend fun connect(
@@ -247,13 +247,17 @@ class AdbConnection private constructor(
             key: AdbRsaKey,
             keyName: String,
             scope: CoroutineScope,
+            /** 연결 단계 기록(웹은 브라우저 콘솔로). */
+            log: (String) -> Unit = {},
             onWaitingForUser: () -> Unit = {},
         ): AdbConnection {
-            channel.write(AdbMessage(AdbMessage.CNXN, AdbMessage.VERSION, AdbMessage.MAX_PAYLOAD, "host::features=$FEATURES\u0000".encodeToByteArray()).encode())
+            log("CNXN 보냄")
+            channel.writeMessage(AdbMessage(AdbMessage.CNXN, AdbMessage.VERSION, AdbMessage.MAX_PAYLOAD, "host::features=$FEATURES\u0000".encodeToByteArray()))
             var signed = false
             var sentKey = false
             while (true) {
                 val message = readMessage(channel)
+                log("받음 $message")
                 when (message.command) {
                     AdbMessage.AUTH -> {
                         if (message.arg0 != AdbMessage.AUTH_TOKEN) throw AdbProtocolException("알 수 없는 AUTH 종류: ${message.arg0}")
@@ -261,12 +265,14 @@ class AdbConnection private constructor(
                             !signed -> AdbMessage(AdbMessage.AUTH, AdbMessage.AUTH_SIGNATURE, 0, key.sign(message.payload)).also { signed = true }
                             !sentKey -> {
                                 sentKey = true
-                                onWaitingForUser()
                                 AdbMessage(AdbMessage.AUTH, AdbMessage.AUTH_RSAPUBLICKEY, 0, (key.androidPublicKey(keyName) + "\u0000").encodeToByteArray())
                             }
                             else -> throw AdbException("기기가 이 키를 받아들이지 않았습니다")
                         }
-                        channel.write(reply.encode())
+                        channel.writeMessage(reply)
+                        log("보냄 AUTH(${if (reply.arg0 == AdbMessage.AUTH_SIGNATURE) "서명" else "공개키"})")
+                        // 공개키를 다 보낸 뒤에 알린다(보내는 중에 멈췄는지 기기가 허용을 기다리는지 구분되게).
+                        if (reply.arg0 == AdbMessage.AUTH_RSAPUBLICKEY) onWaitingForUser()
                     }
                     AdbMessage.CNXN -> {
                         val banner = message.payload.decodeToString().trimEnd('\u0000')
@@ -276,6 +282,15 @@ class AdbConnection private constructor(
                     else -> throw AdbProtocolException("연결 중 뜻밖의 메시지: ${AdbMessage.commandName(message.command)}")
                 }
             }
+        }
+
+        /**
+         * 헤더와 payload를 따로 쓴다. USB에서는 adbd가 24바이트 헤더와 payload를 각각 한 전송으로 받으므로,
+         * 한 전송에 합쳐 보내면 기기 쪽 버퍼를 넘쳐 OUT 엔드포인트가 멈춘다(adb 호스트도 따로 보낸다). TCP는 상관없다.
+         */
+        internal suspend fun ByteSink.writeMessage(message: AdbMessage) {
+            write(message.header())
+            if (message.payload.isNotEmpty()) write(message.payload)
         }
 
         internal suspend fun readMessage(source: ByteSource): AdbMessage {

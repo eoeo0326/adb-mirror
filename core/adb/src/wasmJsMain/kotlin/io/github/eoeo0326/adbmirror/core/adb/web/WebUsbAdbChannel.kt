@@ -19,9 +19,11 @@ external interface UsbDevice : JsAny {
 private external interface AdbInterface : JsAny {
     val configuration: Int
     val interfaceNumber: Int
+    val alternate: Int
     val inEndpoint: Int
     val outEndpoint: Int
     val packetSize: Int
+    val inPacketSize: Int
 }
 
 @JsFun("() => typeof navigator !== 'undefined' && !!navigator.usb")
@@ -42,7 +44,7 @@ private external fun permittedDevices(): Promise<JsArray<UsbDevice>>
       const inE = a.endpoints.find(e => e.direction === 'in' && e.type === 'bulk');
       const outE = a.endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
       if (inE && outE) return { configuration: c.configurationValue, interfaceNumber: i.interfaceNumber,
-        inEndpoint: inE.endpointNumber, outEndpoint: outE.endpointNumber, packetSize: outE.packetSize };
+        alternate: a.alternateSetting, inEndpoint: inE.endpointNumber, outEndpoint: outE.endpointNumber, packetSize: outE.packetSize, inPacketSize: inE.packetSize };
     }
   }
   return null;
@@ -51,23 +53,35 @@ private external fun permittedDevices(): Promise<JsArray<UsbDevice>>
 private external fun findAdbInterface(device: UsbDevice): AdbInterface?
 
 @JsFun(
-    """async (d, configuration, iface) => {
+    """async (d, configuration, iface, alternate, inEp, outEp) => {
   if (!d.opened) await d.open();
   if (!d.configuration || d.configuration.configurationValue !== configuration) await d.selectConfiguration(configuration);
   await d.claimInterface(iface);
+  // ADB 인터페이스는 alternate 0만 있고 halt도 풀지 않는다(libusb로 확인한 정상 흐름: 열기 → 차지 → 전송).
+  if (alternate !== 0) await d.selectAlternateInterface(iface, alternate);
+  console.log('[adb-mirror] USB 열림', d.productName, d.serialNumber, 'iface', iface, 'alt', alternate, 'in', inEp, 'out', outEp);
 }""",
 )
-private external fun openAndClaim(device: UsbDevice, configuration: Int, interfaceNumber: Int): Promise<JsAny?>
+private external fun openAndClaim(device: UsbDevice, configuration: Int, interfaceNumber: Int, alternate: Int, inEndpoint: Int, outEndpoint: Int): Promise<JsAny?>
 
 @JsFun("async (d, iface) => { try { await d.releaseInterface(iface); } catch (e) {} try { await d.close(); } catch (e) {} }")
 private external fun releaseAndClose(device: UsbDevice, interfaceNumber: Int): Promise<JsAny?>
 
-/** 받은 데이터(`Uint8Array`). 기기가 끊기면 null. 호출마다 따로 돌려줘 동시에 불러도 섞이지 않는다. */
+/**
+ * 받은 데이터(`Uint8Array`). 기기가 끊기면 null. 호출마다 따로 돌려줘 동시에 불러도 섞이지 않는다.
+ * 엔드포인트가 멈췄으면(stall) halt를 풀고 한 번 더 읽는다. 실패 내용은 콘솔에 남긴다.
+ */
 @JsFun(
     """async (d, ep, length) => {
-  const r = await d.transferIn(ep, length);
-  if (r.status !== 'ok' || !r.data) return null;
-  return new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let r;
+    try { r = await d.transferIn(ep, length); }
+    catch (e) { console.warn('[adb-mirror] transferIn', length, e); throw e; }
+    if (r.status === 'stall') { console.warn('[adb-mirror] transferIn stall, clearHalt'); await d.clearHalt('in', ep); continue; }
+    if (r.status !== 'ok' || !r.data) { console.warn('[adb-mirror] transferIn status', r.status); return null; }
+    return new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+  }
+  return null;
 }""",
 )
 private external fun transferIn(device: UsbDevice, endpoint: Int, length: Int): Promise<JsAny?>
@@ -89,11 +103,12 @@ internal fun JsAny.toByteArray(): ByteArray = ByteArray(bytesLength(this)) { byt
 
 internal fun ByteArray.toUint8Array(): JsAny = newBytes(size).also { a -> forEachIndexed { i, b -> setByteAt(a, i, b.toInt() and 0xFF) } }
 
-@JsFun("(d, ep, data) => d.transferOut(ep, data).then(r => r.status === 'ok')")
+@JsFun("(d, ep, data) => d.transferOut(ep, data).then(r => { if (r.status !== 'ok') console.warn('[adb-mirror] transferOut status', r.status); return r.status === 'ok'; }, e => { console.warn('[adb-mirror] transferOut', data.length, e); throw e; })")
 private external fun transferOut(device: UsbDevice, endpoint: Int, data: JsAny): Promise<JsBoolean>
 
 /**
- * WebUSB bulk 엔드포인트 위의 [AdbChannel]. adb는 헤더와 payload를 따로 보내므로 요청한 만큼만 받는다.
+ * WebUSB bulk 엔드포인트 위의 [AdbChannel]. 읽기는 늘 IN 패킷 크기의 배수로 요청하고 남은 바이트는 다음 읽기에 쓴다.
+ * 필요한 만큼(예: 헤더 24바이트)만 요청하면 기기가 보낸 패킷이 그보다 클 때 overflow 오류가 난다.
  * 보낼 길이가 패킷 크기의 배수면 끝을 알리려고 길이 0 전송을 덧붙인다(adb 호스트와 같음).
  * 읽기는 [AdbConnection]의 읽기 루프 하나, 쓰기는 그 연결의 쓰기 락 아래에서만 부른다.
  */
@@ -105,7 +120,10 @@ class WebUsbAdbChannel private constructor(private val device: UsbDevice, privat
 
     override suspend fun readFully(count: Int): ByteArray {
         while (buffer.size < count) {
-            val data = transferIn(device, iface.inEndpoint, count - buffer.size).await<JsAny?>() ?: throw EndOfStreamException("USB 연결이 끊겼습니다")
+            val needed = count - buffer.size
+            val packet = iface.inPacketSize.coerceAtLeast(64)
+            val length = (needed + packet - 1) / packet * packet
+            val data = transferIn(device, iface.inEndpoint, length).await<JsAny?>() ?: throw EndOfStreamException("USB 연결이 끊겼습니다")
             buffer += data.toByteArray()
         }
         return buffer.copyOf(count).also { buffer = buffer.copyOfRange(count, buffer.size) }
@@ -128,7 +146,7 @@ class WebUsbAdbChannel private constructor(private val device: UsbDevice, privat
         suspend fun open(device: UsbDevice): WebUsbAdbChannel {
             val iface = findAdbInterface(device) ?: error("이 기기에서 ADB 인터페이스를 찾지 못했습니다. USB 디버깅이 켜져 있는지 확인하세요")
             try {
-                openAndClaim(device, iface.configuration, iface.interfaceNumber).await<JsAny?>()
+                openAndClaim(device, iface.configuration, iface.interfaceNumber, iface.alternate, iface.inEndpoint, iface.outEndpoint).await<JsAny?>()
             } catch (e: Throwable) {
                 throw IllegalStateException("기기를 열지 못했습니다. 이 컴퓨터에서 adb가 돌고 있다면 `adb kill-server`로 끄고 다시 시도하세요 (${e.message})", e)
             }
