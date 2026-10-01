@@ -1,13 +1,8 @@
 package io.github.eoeo0326.adbmirror.core.data.scrcpy
 
+import io.github.eoeo0326.adbmirror.core.data.storage.TextStore
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-/** 앱 저장소의 작은 텍스트 파일 하나. 플랫폼(Desktop·Android)이 구현한다. */
-interface TextStore {
-    suspend fun read(): String?
-    suspend fun write(text: String)
-}
 
 /**
  * 이 앱이 띄우고 아직 정상 종료하지 못한 scrcpy 서버(기기 + scid). 앱이 강제 종료·크래시되면 기기 쪽 adbd가

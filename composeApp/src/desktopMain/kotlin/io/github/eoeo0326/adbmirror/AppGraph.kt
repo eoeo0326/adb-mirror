@@ -8,6 +8,7 @@ import io.github.eoeo0326.adbmirror.core.data.scrcpy.ClasspathServerJarSource
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.LaunchedServers
 import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
+import io.github.eoeo0326.adbmirror.core.data.storage.FileTextStore
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository

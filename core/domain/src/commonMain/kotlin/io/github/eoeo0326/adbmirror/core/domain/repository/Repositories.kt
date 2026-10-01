@@ -10,6 +10,8 @@ import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.Recording
 import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessEndpoint
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import kotlinx.coroutines.flow.Flow
 
 interface DeviceRepository {
@@ -24,10 +26,20 @@ interface DeviceRepository {
 interface WirelessDeviceRepository {
     suspend fun pair(host: String, port: Int, code: String)
 
-    /** 연결한 기기. 기기 목록([DeviceRepository.devices])에도 나타난다. */
+    /** 연결한 기기. 기기 목록([DeviceRepository.devices])에도 나타난다. 연결하면 [known]에 기억한다. */
     suspend fun connect(host: String, port: Int): Device
 
+    /** 연결을 끊고 [known]에서도 잊는다(다시 자동으로 붙지 않게). */
     suspend fun disconnect(serial: String)
+
+    /** 연결했던 기기(최근 순). 다음 실행 때 다시 연결하는 데 쓴다. */
+    suspend fun known(): List<WirelessEndpoint>
+}
+
+/** 같은 네트워크의 무선 디버깅 서비스 찾기(mDNS). 지원하지 않는 플랫폼은 구현하지 않는다. */
+interface WirelessDiscoveryRepository {
+    /** 지금 보이는 서비스 목록. 구독하는 동안 찾는다. */
+    fun services(): Flow<List<WirelessService>>
 }
 
 interface MirrorRepository {

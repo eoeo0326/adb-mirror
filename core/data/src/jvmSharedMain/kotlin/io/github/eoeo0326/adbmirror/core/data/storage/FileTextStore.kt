@@ -1,6 +1,5 @@
-package io.github.eoeo0326.adbmirror
+package io.github.eoeo0326.adbmirror.core.data.storage
 
-import io.github.eoeo0326.adbmirror.core.data.scrcpy.TextStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File

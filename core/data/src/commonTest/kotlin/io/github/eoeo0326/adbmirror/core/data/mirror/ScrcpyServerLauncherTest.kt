@@ -2,9 +2,9 @@ package io.github.eoeo0326.adbmirror.core.data.mirror
 
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.LaunchedServers
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyException
-import io.github.eoeo0326.adbmirror.core.data.scrcpy.TextStore
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ServerJar
+import io.github.eoeo0326.adbmirror.core.data.storage.TextStore
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.adb.ByteSource
 import kotlinx.coroutines.awaitCancellation

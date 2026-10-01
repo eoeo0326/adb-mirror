@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.model.isSelectable
 
 @Composable
@@ -114,6 +115,7 @@ private fun WirelessCard(form: WirelessForm, onIntent: (DeviceListIntent) -> Uni
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,
         )
+        if (form.found.isNotEmpty()) FoundServices(form, onIntent)
         Field("IP 주소", form.host, KeyboardType.Uri, !form.busy) { edit(form.copy(host = it)) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Field("페어링 포트", form.pairPort, KeyboardType.Number, !form.busy, Modifier.weight(1f)) { edit(form.copy(pairPort = it)) }
@@ -126,6 +128,21 @@ private fun WirelessCard(form: WirelessForm, onIntent: (DeviceListIntent) -> Uni
         }
         form.message?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = if (form.failed) colors.error else colors.onSurfaceVariant)
+        }
+    }
+}
+
+/** 같은 네트워크에서 찾은 무선 디버깅 서비스. 연결 서비스는 누르면 바로 연결하고, 페어링 서비스는 주소·포트를 채운다. */
+@Composable
+private fun FoundServices(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit) {
+    Text("이 네트워크에서 찾음", style = MaterialTheme.typography.labelMedium)
+    form.found.sortedBy { it.kind }.forEach { service ->
+        val label = when (service.kind) {
+            WirelessService.Kind.Pairing -> "페어링 ${service.host}:${service.port}"
+            WirelessService.Kind.Connect -> "연결 ${service.host}:${service.port}"
+        }
+        OutlinedButton(onClick = { onIntent(DeviceListIntent.UseService(service)) }, enabled = !form.busy, modifier = Modifier.fillMaxWidth()) {
+            Text(label)
         }
     }
 }
