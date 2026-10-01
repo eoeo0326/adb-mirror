@@ -1,0 +1,41 @@
+{
+  "fill" : {
+    "solid" : "srgb:0.09020,0.12941,0.16863,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "glass" : false,
+          "image-name" : "phone-front.svg",
+          "name" : "phone-front"
+        },
+        {
+          "glass" : false,
+          "image-name" : "phone-back.svg",
+          "name" : "phone-back"
+        },
+        {
+          "glass" : false,
+          "image-name" : "reflection.svg",
+          "name" : "reflection"
+        }
+      ],
+      "name" : "glyph",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : [
+      "macOS"
+    ]
+  }
+}

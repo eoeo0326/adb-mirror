@@ -197,6 +197,8 @@ KMP/CMP로 옮기는 작업은 Phase 0~4로 나눠 [GitHub Milestones](https://g
 
 `assets/icon/`에 원본 SVG와 여러 크기의 PNG(16~1024px), macOS용 `AppIcon.icns`, Windows용 `icon.ico`가 있습니다. 겹친 두 폰은 원본과 미러링된 화면을, 아래의 옅은 비침은 거울을 나타냅니다.
 
+macOS 26 이상은 Icon Composer 원본 `assets/icon/AppIcon.icon`을 컴파일한 `packaging/macos/Resources/Assets.car`를 씁니다(없으면 아이콘이 흰 판 위에 작게 보입니다). 원본을 고친 뒤에는 Xcode 26이 있는 Mac에서 `scripts/build-mac-icon.sh`로 다시 만들어 함께 커밋하세요. 빌드와 CI에는 Xcode가 필요 없습니다.
+
 ## 라이선스
 
 [Apache License 2.0](LICENSE). 이 레포에는 `scrcpy-server` 바이너리가 들어 있지 않습니다. 빌드할 때 Genymobile/scrcpy 릴리즈에서 받아 씁니다. 고지 사항은 [NOTICE](NOTICE)를 참고하세요.

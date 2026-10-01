@@ -75,6 +75,13 @@ compose.desktop {
                 dockName = "ADB Mirror"
                 appCategory = "public.app-category.developer-tools"
                 iconFile.set(rootProject.file("assets/icon/AppIcon.icns"))
+                infoPlist {
+                    // macOS 26 이상은 Contents/Resources/Assets.car의 AppIcon을, 이전 버전은 CFBundleIconFile(icns)을 쓴다.
+                    extraKeysRawXml = """
+                        <key>CFBundleIconName</key>
+                        <string>AppIcon</string>
+                    """.trimIndent()
+                }
                 packageVersion = macPackageVersion
                 dmgPackageVersion = macPackageVersion
                 packageBuildVersion = macPackageVersion
@@ -119,6 +126,17 @@ val distDir = layout.buildDirectory.dir("release")
 // Compose가 패키지 작업을 afterEvaluate에서 등록하므로 그 뒤에 잇는다.
 afterEvaluate {
     val appImageDir = tasks.named<AbstractJPackageTask>("createDistributable").flatMap { it.destinationDir }
+
+    // Contents/Resources는 macOS 앱 번들 구조라, -Pdist.os와 무관하게 실제로 macOS에서 빌드할 때만 붙인다.
+    if (System.getProperty("os.name").lowercase().contains("mac")) {
+        tasks.named<AbstractJPackageTask>("createDistributable") {
+            // jpackage가 이 폴더를 Contents/Resources에 합친 뒤 서명하므로 Assets.car도 서명 범위에 든다.
+            val macAppContent = rootProject.file("packaging/macos/Resources")
+            inputs.dir(macAppContent).withPropertyName("macAppContent").withPathSensitivity(PathSensitivity.RELATIVE)
+            // freeArgs는 인자 파일에 따옴표 없이 들어가므로 공백이 있는 경로를 위해 직접 감싼다.
+            freeArgs.addAll("--app-content", "\"${macAppContent.absolutePath}\"")
+        }
+    }
 
     /**
      * 포터블 배포본: 설치 없이 풀어서 쓰는 앱 이미지 + `portable` 표식 파일. Windows는 zip, Linux는 tar.gz.
