@@ -6,7 +6,7 @@ adb로 연결한 Android 기기 화면을 데스크톱 창에 띄우고, 마우�
 
 기기 쪽 인코더로 [scrcpy](https://github.com/Genymobile/scrcpy)의 `scrcpy-server`만 사용합니다. 받은 H.264 영상은 macOS의 VideoToolbox로 직접 디코딩해 표시하므로 scrcpy나 FFmpeg를 따로 설치할 필요가 없습니다.
 
-> Kotlin Multiplatform + Compose Multiplatform 앱이 Desktop(macOS·Windows·Linux)과 Android에서 동작합니다. Web(Chromium)은 준비 중입니다. 처음 만든 macOS용 Swift 프로토타입은 `macos-swift/`에 있습니다. 자세한 내용은 [로드맵](docs/ROADMAP.md)을 참고하세요.
+> Kotlin Multiplatform + Compose Multiplatform 앱이 Desktop(macOS·Windows·Linux), Android, Web(Chromium)에서 동작합니다. 처음 만든 macOS용 Swift 프로토타입은 `macos-swift/`에 있습니다. 자세한 내용은 [로드맵](docs/ROADMAP.md)을 참고하세요.
 
 ## 기능
 
@@ -41,7 +41,7 @@ swift build -c release
 .build/release/adb-mirror
 ```
 
-## KMP 앱 (Desktop·Android 사용 가능 · Web 준비 중)
+## KMP 앱 (Desktop·Android·Web)
 
 Kotlin Multiplatform + Compose Multiplatform 버전입니다. Desktop에서 기기 선택 → 미러링 → 터치, 클릭 이펙트, 스크린샷, MP4 녹화, GIF·WebP 변환, 설정 저장까지 됩니다. macOS·Windows·Linux 설치 파일과 포터블은 [Releases](https://github.com/eoeo0326/adb-mirror/releases)에서 받을 수 있습니다.
 
@@ -84,6 +84,22 @@ macOS 14 이하에서는 Finder에서 앱을 우클릭 → 열기로도 열 수 
 4. 기기를 고르고 "미러링 시작"을 누릅니다. 메뉴에서 스크린샷 복사·저장, 녹화, GIF·WebP 변환을 할 수 있습니다.
 
 저장 위치는 스크린샷·GIF·WebP가 `Pictures/ADB Mirror`, 녹화가 `Movies/ADB Mirror`입니다. 저장소 권한은 필요 없습니다. Android 9 이하는 앱 전용 폴더(`Android/data/…`)에 저장합니다.
+
+### Web 앱
+
+Chrome·Edge 같은 Chromium 브라우저가 WebUSB로 기기에 직접 붙습니다. adb나 다른 프로그램을 설치하지 않아도 됩니다. 페이지는 https 또는 localhost에서 열어야 합니다.
+
+```bash
+./gradlew :composeApp:wasmJsBrowserDistribution   # composeApp/build/dist/wasmJs/productionExecutable/
+python3 -m http.server -d composeApp/build/dist/wasmJs/productionExecutable 8080   # http://localhost:8080
+```
+
+1. 기기의 USB 디버깅을 켜고 케이블로 연결합니다. 이 컴퓨터에서 adb 서버가 돌고 있으면 USB를 차지하므로 `adb kill-server`로 끕니다.
+2. "USB 기기 연결"을 누르고 브라우저 창에서 기기를 고릅니다. 처음이면 기기에서 "USB 디버깅 허용"을 누릅니다.
+3. 기기를 고르고 "미러링 시작"을 누릅니다. 영상은 WebCodecs로 그리고, 클릭·드래그는 터치로 보냅니다.
+4. 스크린샷 복사는 클립보드, 저장과 녹화(MP4)는 브라우저 다운로드로 받습니다. GIF·WebP 변환은 Desktop·Android에서만 됩니다.
+
+브라우저의 adb 키는 이 사이트의 localStorage에 둡니다. 기기에서 "항상 허용"한 키라서, 공용 컴퓨터에서는 사이트 데이터를 지우세요.
 
 ### 설치 파일 만들기
 

@@ -244,8 +244,12 @@ class MirrorViewModel(
         if (files.isEmpty() || _state.value.conversion is ConversionState.Converting) return
         viewModelScope.launch {
             try {
-                val info = getVideoInfo(files)
                 val formats = getConversionFormats()
+                if (formats.isEmpty()) {
+                    _effects.trySend(MirrorEffect.ShowMessage("이 플랫폼에서는 GIF·WebP 변환을 지원하지 않습니다"))
+                    return@launch
+                }
+                val info = getVideoInfo(files)
                 val options = ConversionOptions(width = minOf(ConversionOptions().width, info.width))
                 reduce(MirrorResult.ConversionOpened(ConversionDraft(files, info, options, formats)))
             } catch (e: CancellationException) {

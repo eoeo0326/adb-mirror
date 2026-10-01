@@ -10,18 +10,12 @@ import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.LaunchedServers
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
-import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.settings.InMemorySettingsRepository
 import io.github.eoeo0326.adbmirror.core.data.web.FetchServerJarSource
 import io.github.eoeo0326.adbmirror.core.data.web.LocalStorageTextStore
-import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
-import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
-import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
+import io.github.eoeo0326.adbmirror.core.data.web.WebRecordingRepository
+import io.github.eoeo0326.adbmirror.core.data.web.WebScreenshotSink
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
-import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
-import io.github.eoeo0326.adbmirror.core.domain.model.Recording
-import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
-import io.github.eoeo0326.adbmirror.core.domain.repository.RecordingRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.ConvertRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
@@ -42,8 +36,6 @@ import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withTimeout
 
 /** 웹앱의 수동 DI. WebUSB로 고른 기기에 ADB 프로토콜로 직접 붙는다(adb 서버 없음). */
@@ -52,7 +44,8 @@ class WebAppGraph {
     private val transport = DirectAdbTransport(scope)
     private val settings = InMemorySettingsRepository()
     private val devices = DeviceRepositoryImpl(transport)
-    private val screenshots = ScreenshotRepositoryImpl(transport, UnsupportedScreenshotSink)
+    private val screenshots = ScreenshotRepositoryImpl(transport, WebScreenshotSink)
+    private val recordings = WebRecordingRepository(scope)
     private val launched = LaunchedServers(LocalStorageTextStore("adb-mirror.launched-servers"))
     private val mirror = MirrorRepositoryImpl(ScrcpyServerLauncher(transport, FetchServerJarSource, log = ::println, launched = launched), scope)
 
@@ -88,27 +81,10 @@ class WebAppGraph {
         captureScreenshot = CaptureScreenshotUseCase(screenshots),
         copyScreenshot = CopyScreenshotUseCase(screenshots),
         saveScreenshot = SaveScreenshotUseCase(screenshots, settings),
-        startRecording = StartRecordingUseCase(UnsupportedRecordingRepository, settings),
-        stopRecording = StopRecordingUseCase(UnsupportedRecordingRepository),
-        getVideoInfo = GetVideoInfoUseCase(UnsupportedRecordingRepository),
-        getConversionFormats = GetConversionFormatsUseCase(UnsupportedRecordingRepository),
-        convertRecording = ConvertRecordingUseCase(UnsupportedRecordingRepository),
+        startRecording = StartRecordingUseCase(recordings, settings),
+        stopRecording = StopRecordingUseCase(recordings),
+        getVideoInfo = GetVideoInfoUseCase(recordings),
+        getConversionFormats = GetConversionFormatsUseCase(recordings),
+        convertRecording = ConvertRecordingUseCase(recordings),
     )
-}
-
-private const val NOT_YET = "웹에서는 아직 지원하지 않습니다"
-
-/** 스크린샷 복사·저장(클립보드·다운로드)은 #21 뒤 PR에서 붙인다. */
-private object UnsupportedScreenshotSink : ScreenshotSink {
-    override suspend fun copyToClipboard(png: ByteArray) = throw UnsupportedOperationException(NOT_YET)
-    override suspend fun save(png: ByteArray, dir: String?, baseName: String): String = throw UnsupportedOperationException(NOT_YET)
-}
-
-/** 녹화(OPFS)·변환은 #21 뒤 PR에서 붙인다. */
-private object UnsupportedRecordingRepository : RecordingRepository {
-    override suspend fun start(session: MirrorSession, outputDir: String?) = throw UnsupportedOperationException(NOT_YET)
-    override suspend fun stop(serial: String): Recording? = null
-    override suspend fun info(file: String): VideoInfo = throw UnsupportedOperationException(NOT_YET)
-    override fun supportedFormats(): Set<AnimatedFormat> = emptySet()
-    override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = flow { throw UnsupportedOperationException(NOT_YET) }
 }
