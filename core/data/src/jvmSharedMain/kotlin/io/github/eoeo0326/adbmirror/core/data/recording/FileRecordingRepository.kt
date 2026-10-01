@@ -1,9 +1,6 @@
 package io.github.eoeo0326.adbmirror.core.data.recording
 
 import io.github.eoeo0326.adbmirror.core.data.conversion.AnimationConverter
-import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegVideoFrameSource
-import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegWebpFrameEncoder
-import io.github.eoeo0326.adbmirror.core.data.screenshot.defaultOutputDir
 import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
@@ -27,9 +24,26 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.nio.file.Files
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+
+/**
+ * 녹화·변환 파일을 어디에 두고 사용자에게 어떤 위치로 보여줄지. Desktop은 폴더에 그대로 두고,
+ * Android는 앱 캐시에 쓴 뒤 MediaStore(동영상·사진)에 올린다.
+ */
+interface CaptureOutput {
+    /** 녹화 part를 쓸 폴더. [outputDir]는 설정의 저장 폴더(없으면 null). */
+    fun recordingDir(outputDir: String?): File
+
+    /** 녹화를 마친 part들. 사용자에게 보여줄 위치를 같은 순서로 돌려준다. */
+    suspend fun recordingSaved(files: List<File>): List<String>
+
+    /** 변환 중 임시 파일을 둘 폴더. */
+    fun conversionTempDir(source: File): File
+
+    /** 다 쓴 변환 결과 [tmp]를 `<source 이름>.<ext>`로 내보내고 보여줄 위치를 돌려준다. [tmp]는 옮기거나 지운다. */
+    suspend fun publishAnimation(tmp: File, source: File, ext: String): String
+}
 
 /**
  * 기기마다 녹화 하나를 [scope]에서 돌리며 파일로 쓴다.
@@ -37,9 +51,9 @@ import java.time.format.DateTimeFormatter
  */
 class FileRecordingRepository(
     private val scope: CoroutineScope,
-    private val home: File = File(System.getProperty("user.home")),
+    private val output: CaptureOutput,
+    private val converter: AnimationConverter,
     private val now: () -> LocalDateTime = LocalDateTime::now,
-    private val converter: AnimationConverter = AnimationConverter(FfmpegVideoFrameSource(), FfmpegWebpFrameEncoder.createOrNull()),
 ) : RecordingRepository {
     private class Active(val recorder: Recorder) {
         lateinit var job: Job
@@ -52,7 +66,7 @@ class FileRecordingRepository(
 
     override suspend fun start(session: MirrorSession, outputDir: String?) = lock.withLock {
         check(session.serial !in active) { "이미 녹화 중입니다" }
-        val dir = (outputDir?.let(::File) ?: defaultOutputDir(home)).also { it.mkdirs() }
+        val dir = output.recordingDir(outputDir).also { it.mkdirs() }
         val base = "adb-mirror_" + session.serial.replace(Regex("[^A-Za-z0-9._-]"), "_") + "_" + now().format(STAMP)
         val recorder = Recorder { index -> FilePart(uniqueFile(dir, base, index)) }
         val self = Active(recorder)
@@ -84,29 +98,24 @@ class FileRecordingRepository(
         val a = lock.withLock { active.remove(serial) } ?: return@withContext null
         a.job.cancelAndJoin() // 이 뒤로는 recorder를 만지는 코루틴이 없다
         val result = withContext(Dispatchers.IO) { a.recorder.finish() }
-        Recording(serial, result.files, result.durationMs)
+        val locations = if (result.files.isEmpty()) emptyList() else output.recordingSaved(result.files.map(::File))
+        Recording(serial, result.files, result.durationMs, locations)
     }
 
     override suspend fun info(file: String): VideoInfo = converter.info(file)
 
     override fun supportedFormats(): Set<AnimatedFormat> = converter.supportedFormats
 
-    /** 첫 파일 옆 `<이름>.gif|webp`(있으면 `_2`…)로 쓴다. 끝날 때까지 임시 `.part` 파일에 쓰고, 취소·실패하면 지운다. */
+    /** [CaptureOutput.publishAnimation]으로 내보낸다. 끝날 때까지 임시 `.part` 파일에 쓰고, 취소·실패하면 지운다. */
     override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = flow {
-        val source = File(files.first())
+        val source = File(files.first()).absoluteFile
         val ext = if (options.format == AnimatedFormat.Gif) "gif" else "webp"
-        val base = source.name.substringBeforeLast('.')
-        val dir = source.absoluteFile.parentFile
-        val target = generateSequence(1) { it + 1 }
-            .map { n -> File(dir, if (n == 1) "$base.$ext" else "${base}_$n.$ext") }
-            .first { !it.exists() }
         // 취소 직후 다시 변환해도 이전 흐름의 임시 파일과 겹치지 않게 이름을 따로 받는다.
-        val tmp = File.createTempFile(target.name + ".", ".part", dir)
+        val tmp = File.createTempFile(source.nameWithoutExtension + ".", ".$ext.part", output.conversionTempDir(source))
         try {
             val bytes = converter.convert(files, options) { emit(ConversionProgress.Running(it)) }
             tmp.writeBytes(bytes)
-            Files.move(tmp.toPath(), target.toPath())
-            emit(ConversionProgress.Done(target.absolutePath))
+            emit(ConversionProgress.Done(output.publishAnimation(tmp, source, ext)))
         } finally {
             tmp.delete()
         }

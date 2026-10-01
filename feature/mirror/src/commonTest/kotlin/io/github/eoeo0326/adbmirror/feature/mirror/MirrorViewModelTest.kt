@@ -140,6 +140,7 @@ class MirrorViewModelTest {
     private var recordStartGate: CompletableDeferred<Unit>? = null
     private var failRecordStart: String? = null
     private var recordedFiles = listOf("/out/a.mp4")
+    private var recordedLocations: List<String>? = null
     private val recordingRepo = object : RecordingRepository {
         override suspend fun start(session: MirrorSession, outputDir: String?) {
             recordStartGate?.await()
@@ -147,7 +148,7 @@ class MirrorViewModelTest {
             check(recordingActive.add(session.serial)) { "이미 녹화 중" }
         }
         override suspend fun stop(serial: String): Recording? =
-            if (recordingActive.remove(serial)) Recording(serial, recordedFiles, 1000) else null
+            if (recordingActive.remove(serial)) Recording(serial, recordedFiles, 1000, recordedLocations ?: recordedFiles) else null
         override suspend fun info(file: String) = VideoInfo(4_000, 340, 720)
         override fun supportedFormats() = formats
         override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = flow {
@@ -436,6 +437,17 @@ class MirrorViewModelTest {
         assertEquals(RecordingState.Idle, vm.state.value.recording)
         assertEquals(MirrorEffect.RecordingSaved(listOf("/out/a.mp4")), vm.effects.first())
         assertTrue(recordingActive.isEmpty())
+    }
+
+    @Test
+    fun recordingSavedShowsStoredLocations() = runTest {
+        // Android: 캐시의 파일로 변환하고, 메시지에는 MediaStore 위치를 보여준다.
+        recordedLocations = listOf("Movies/ADB Mirror/a.mp4")
+        val vm = mirroringViewModel()
+        vm.onIntent(MirrorIntent.StartRecording)
+        vm.onIntent(MirrorIntent.StopRecording)
+        assertEquals(MirrorEffect.RecordingSaved(listOf("/out/a.mp4"), listOf("Movies/ADB Mirror/a.mp4")), vm.effects.first())
+        assertEquals(listOf("/out/a.mp4"), vm.state.value.lastRecording)
     }
 
     @Test

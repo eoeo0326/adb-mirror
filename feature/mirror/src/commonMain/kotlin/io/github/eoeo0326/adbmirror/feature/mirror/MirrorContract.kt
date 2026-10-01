@@ -127,7 +127,8 @@ sealed interface MirrorResult {
 sealed interface MirrorEffect {
     data class ShowMessage(val message: String) : MirrorEffect
     data class ScreenshotSaved(val path: String) : MirrorEffect
-    data class RecordingSaved(val files: List<String>) : MirrorEffect
+    /** [files]는 변환에 넘길 파일, [locations]는 보여줄 저장 위치. */
+    data class RecordingSaved(val files: List<String>, val locations: List<String> = files) : MirrorEffect
     data class ConversionDone(val file: String) : MirrorEffect
     data object AskShowTouchesForRecording : MirrorEffect
     data class Error(val message: String) : MirrorEffect

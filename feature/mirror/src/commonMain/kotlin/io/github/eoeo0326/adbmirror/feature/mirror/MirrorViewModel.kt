@@ -236,7 +236,7 @@ class MirrorViewModel(
         reduce(MirrorResult.RecordingStopped(sessionId))
         if (recording.files.isNotEmpty()) reduce(MirrorResult.RecordingSaved(recording.files))
         _effects.trySend(
-            if (recording.files.isEmpty()) MirrorEffect.ShowMessage("녹화된 화면이 없어 파일을 만들지 않았습니다") else MirrorEffect.RecordingSaved(recording.files),
+            if (recording.files.isEmpty()) MirrorEffect.ShowMessage("녹화된 화면이 없어 파일을 만들지 않았습니다") else MirrorEffect.RecordingSaved(recording.files, recording.locations),
         )
     }
 
