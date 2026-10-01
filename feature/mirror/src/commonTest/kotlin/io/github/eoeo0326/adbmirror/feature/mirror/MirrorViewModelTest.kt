@@ -537,6 +537,15 @@ class MirrorViewModelTest {
     }
 
     @Test
+    fun conversionUnavailableOnPlatformShowsMessageInsteadOfPanel() = runTest {
+        formats = emptySet() // 웹: 변환 없음
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
+        assertNull(vm.state.value.conversionDraft)
+        assertEquals(MirrorEffect.ShowMessage("이 플랫폼에서는 GIF·WebP 변환을 지원하지 않습니다"), vm.effects.first())
+    }
+
+    @Test
     fun convertReportsProgressAndDone() = runTest {
         val gate = CompletableDeferred<Unit>().also { conversionGate = it }
         val vm = viewModel()
