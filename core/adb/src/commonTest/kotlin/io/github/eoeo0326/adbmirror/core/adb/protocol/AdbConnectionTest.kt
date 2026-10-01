@@ -29,6 +29,23 @@ class AdbConnectionTest {
     }
 
     @Test
+    fun headerAndPayloadAreSeparateWrites() = runTest {
+        // USB에서는 adbd가 헤더(24B)와 payload를 각각 한 전송으로 받는다. 합쳐 보내면 기기 쪽에서 넘친다.
+        val (host, _) = setUp()
+        val sizes = mutableListOf<Int>()
+        val recording = object : AdbChannel by host {
+            override suspend fun write(bytes: ByteArray) {
+                sizes += bytes.size
+                host.write(bytes)
+            }
+        }
+        AdbConnection.connect(recording, key, "me@test", backgroundScope)
+        assertEquals(24, sizes[0], "CNXN 헤더")
+        assertEquals(24, sizes[2], "AUTH 헤더")
+        assertEquals(256, sizes[3], "AUTH 서명 payload")
+    }
+
+    @Test
     fun unknownKeySendsPublicKeyAndWaitsForUser() = runTest {
         val (host, device) = setUp(knowsKey = false)
         var prompted = false

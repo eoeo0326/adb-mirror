@@ -124,7 +124,7 @@ private fun WebApp(graph: WebAppGraph) {
                             val name = graph.connect(chosen.await()) { status = "기기 화면에서 \"USB 디버깅 허용\"을 눌러 주세요" }
                             "${name}에 연결했습니다"
                         } catch (e: Throwable) {
-                            "연결하지 못했습니다: ${e.message ?: e::class.simpleName}"
+                            "연결하지 못했습니다: ${readableError(e)}"
                         } finally {
                             busy = false
                         }
@@ -138,4 +138,10 @@ private fun WebApp(graph: WebAppGraph) {
         }
         DeviceListRoute(listViewModel, Modifier.fillMaxSize().padding(top = 8.dp))
     }
+}
+
+/** JS 예외(DOMException)는 Kotlin 메시지에 형식 정보가 붙어 길어진다. 원문 설명만 보여 준다. */
+private fun readableError(e: Throwable): String {
+    val message = e.message ?: return e::class.simpleName ?: "알 수 없는 오류"
+    return message.removePrefix("Non-Kotlin exception ").substringBefore(" of type '")
 }

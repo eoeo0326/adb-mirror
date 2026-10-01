@@ -36,7 +36,7 @@ import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** 웹앱의 수동 DI. WebUSB로 고른 기기에 ADB 프로토콜로 직접 붙는다(adb 서버 없음). */
 class WebAppGraph {
@@ -59,7 +59,26 @@ class WebAppGraph {
         val channel = WebUsbAdbChannel.open(device)
         try {
             val key = WebAdbKeyStore.loadOrCreate()
-            val connection = withTimeout(60_000) { AdbConnection.connect(channel, key, WebAdbKeyStore.KEY_NAME, scope, onWaitingForUser) }
+            var waitingForUser = false
+            val connection = withTimeoutOrNull(60_000) {
+                AdbConnection.connect(
+                    channel,
+                    key,
+                    WebAdbKeyStore.KEY_NAME,
+                    scope,
+                    onWaitingForUser = {
+                        waitingForUser = true
+                        onWaitingForUser()
+                    },
+                    log = { println("[adb-mirror] $it") },
+                )
+            } ?: throw IllegalStateException(
+                if (waitingForUser) {
+                    "기기가 1분 안에 허용하지 않았습니다. 폰 화면을 켜고 잠금을 푼 뒤 다시 연결하세요. 창이 계속 안 뜨면 개발자 옵션에서 \"USB 디버깅 권한 승인 취소\" 후 USB 디버깅을 껐다 켜 보세요"
+                } else {
+                    "기기가 응답하지 않습니다. 케이블을 다시 꽂고, 다른 프로그램(adb, Android Studio)이 기기를 쓰고 있지 않은지 확인하세요"
+                },
+            )
             transport.add(channel.serial, connection)
             return connection.model ?: channel.productName ?: channel.serial
         } catch (e: Throwable) {
