@@ -82,3 +82,4 @@ val fetchScrcpyServer = tasks.register<FetchScrcpyServer>("fetchScrcpyServer") {
 kotlin.sourceSets.getByName("jvmMain").resources.srcDir(fetchScrcpyServer)
 // Android 앱도 같은 서버를 Java 리소스로 싣는다(Kadb로 기기에 push).
 kotlin.sourceSets.getByName("androidMain").resources.srcDir(fetchScrcpyServer)
+// 웹앱은 composeApp이 이 폴더를 배포 파일에 넣고 fetch로 받는다(FetchServerJarSource).

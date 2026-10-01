@@ -41,6 +41,10 @@ kotlin {
     }
 }
 
+// 웹앱은 scrcpy-server를 함께 배포하고 fetch로 받는다(core/data의 fetchScrcpyServer 결과 폴더).
+kotlin.sourceSets.getByName("wasmJsMain").resources.srcDir(project(":core:data").layout.buildDirectory.dir("generated/scrcpy-server"))
+tasks.matching { it.name == "wasmJsProcessResources" }.configureEach { dependsOn(":core:data:fetchScrcpyServer") }
+
 /**
  * 패키지 버전은 MAJOR.MINOR.PATCH(`gradle.properties`의 appVersion).
  * macOS(jpackage)는 첫 숫자가 0이면 거부하므로, 1.0 전까지 macOS 패키지 메타데이터에만 첫 숫자를 1로 올려 쓴다(0.3.0 → 1.3.0).

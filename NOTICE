@@ -27,3 +27,7 @@ The Android application uses the following libraries:
 - Bouncy Castle (https://www.bouncycastle.org), licensed under the MIT License.
 - Okio (https://github.com/square/okio), licensed under the Apache License, Version 2.0.
 - AndroidHiddenApiBypass (https://github.com/LSPosed/AndroidHiddenApiBypass), licensed under the Apache License, Version 2.0.
+
+The web application bundles a subset (Hangul syllables and Latin) of Noto Sans KR
+(https://github.com/google/fonts/tree/main/ofl/notosanskr), Copyright 2014-2021 Adobe,
+licensed under the SIL Open Font License, Version 1.1 (composeApp/src/wasmJsMain/resources/fonts/NotoSansKR-OFL.txt).
