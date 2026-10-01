@@ -92,20 +92,29 @@ private external fun clearDir(dir: JsAny): Promise<JsAny?>
  * 끝나면 브라우저 다운로드로 내보낸다. 메모리에 녹화 전체를 쥐지 않는다. GIF·WebP 변환은 지원하지 않는다.
  */
 class WebRecordingRepository(private val scope: CoroutineScope) : RecordingRepository {
-    /** 조각 하나. 쓰기는 큐에 넣고 [writer]가 OPFS에 차례로 쓴다. */
+    /** 조각 하나. 쓰기는 큐에 넣고 [writer]가 OPFS에 차례로 쓴다. 쓰다 실패하면(용량 초과 등) [failure]에 남기고 더 받지 않는다. */
     private class OpfsPart(override val path: String, dir: JsAny, scope: CoroutineScope) : RecordingPart {
         private val queue = Channel<ByteArray>(Channel.UNLIMITED)
+        var failure: Throwable? = null
+            private set
         val writer: Job = scope.launch {
-            val w = createWritable(dir, path).await<JsAny>()
             try {
-                for (bytes in queue) writeChunk(w, bytes.toUint8Array()).await<JsAny?>()
-            } finally {
-                withContext(NonCancellable) { closeWritable(w).await<JsAny?>() }
+                val w = createWritable(dir, path).await<JsAny>()
+                try {
+                    for (bytes in queue) writeChunk(w, bytes.toUint8Array()).await<JsAny?>()
+                } finally {
+                    withContext(NonCancellable) { closeWritable(w).await<JsAny?>() }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                failure = e
+                queue.cancel() // 쌓인 조각을 버리고, 뒤이은 write는 큐에 들어가지 않는다
             }
         }
 
         override fun write(bytes: ByteArray) {
-            queue.trySend(bytes)
+            if (failure == null) queue.trySend(bytes)
         }
 
         override fun close() {
@@ -148,6 +157,8 @@ class WebRecordingRepository(private val scope: CoroutineScope) : RecordingRepos
         a.job.cancelAndJoin()
         val result = a.recorder.finish()
         a.parts.forEach { it.writer.join() }
+        // 쓰다 실패한 조각이 있으면 잘린 파일을 정상 녹화처럼 내려받지 않고 알린다.
+        a.parts.firstNotNullOfOrNull { it.failure }?.let { throw IllegalStateException("녹화 파일을 쓰지 못했습니다: ${it.message}", it) }
         for (name in result.files) downloadBlob(fileOf(a.dir, name).await<JsAny>(), name)
         Recording(serial, result.files, result.durationMs, result.files.map { "다운로드/$it" })
     }
