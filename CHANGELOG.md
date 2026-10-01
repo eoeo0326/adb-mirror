@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 제거
+- macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
+
 ## [0.6.0] - 2026-10-01
 
 Phase 4(Web) 완료 릴리즈입니다. Chrome·Edge에서 **https://eoeo0326.github.io/adb-mirror/** 를 열면 adb나 다른 프로그램을 설치하지 않고 USB로 기기를 미러링할 수 있습니다. 브라우저가 WebUSB로 adbd와 직접 말합니다. Desktop 설치 파일과 포터블은 이 릴리즈의 첨부 파일에 있습니다.

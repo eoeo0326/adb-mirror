@@ -6,7 +6,7 @@
 같은 이름의 .json에는 참조 파서로 센 기대값(세션 목록, 패킷 수, 크기)을 남긴다.
 
 사용법:
-  ./scripts/fetch-server.sh
+  ./gradlew :core:data:fetchScrcpyServer
   python3 scripts/capture_fixture.py -s <serial> --name scrcpy-v4.1-h264-rotate --seconds 8 --rotate
 
 --rotate를 주면 캡처 도중 가로로 돌렸다가 되돌린다. 기기의 회전 설정은 끝나면 원래 값으로 복원한다.
@@ -23,10 +23,23 @@ import sys
 import threading
 import time
 
-SERVER_VERSION = "4.1"  # macos-swift/Sources/adb-mirror/ScrcpyServer.swift 의 serverVersion 과 같아야 한다
 DEVICE_PATH = "/data/local/tmp/scrcpy-server.jar"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SERVER_JAR = os.path.join(ROOT, "macos-swift/Sources/adb-mirror/Resources/scrcpy-server")
+# Gradle fetchScrcpyServer 가 gradle.properties 의 scrcpy.version 으로 받아 둔 서버를 쓴다.
+SERVER_JAR = os.path.join(
+    ROOT, "core/data/build/generated/scrcpy-server/io/github/eoeo0326/adbmirror/scrcpy/scrcpy-server")
+
+
+def gradle_property(key):
+    with open(os.path.join(ROOT, "gradle.properties"), encoding="utf-8") as f:
+        for line in f:
+            name, sep, value = line.partition("=")
+            if sep and name.strip() == key:
+                return value.strip()
+    sys.exit(f"gradle.properties 에 {key} 가 없습니다.")
+
+
+SERVER_VERSION = gradle_property("scrcpy.version")
 
 FLAG_SESSION = 1 << 63
 FLAG_CONFIG = 1 << 62
@@ -41,7 +54,7 @@ def adb(serial, *args, check=True):
 
 
 def parse(data):
-    """참조 파서. Swift StreamReader 와 같은 규칙으로 스트림을 센다."""
+    """참조 파서. VideoStreamParser(core/data) 와 같은 규칙으로 스트림을 센다."""
     pos = 0
 
     def take(n):
@@ -101,7 +114,7 @@ def main():
     args = ap.parse_args()
 
     if not os.path.isfile(SERVER_JAR):
-        sys.exit("scrcpy-server가 없습니다. scripts/fetch-server.sh 를 먼저 실행하세요.")
+        sys.exit("scrcpy-server가 없습니다. ./gradlew :core:data:fetchScrcpyServer 를 먼저 실행하세요.")
 
     serial = args.serial
     scid = f"{random.randrange(1 << 31):08x}"
