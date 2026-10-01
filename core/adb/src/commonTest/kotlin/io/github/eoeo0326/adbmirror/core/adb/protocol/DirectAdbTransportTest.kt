@@ -26,7 +26,7 @@ class DirectAdbTransportTest {
     }
 
     /** 메모리 통로 너머의 가짜 기기가 답할 때까지(가상 시간으로) 기다린다. */
-    private suspend fun awaitUntil(condition: () -> Boolean) = withTimeout(5_000) { while (!condition()) delay(10) }
+    private suspend fun awaitUntil(condition: suspend () -> Boolean) = withTimeout(5_000) { while (!condition()) delay(10) }
 
     @Test
     fun listsAddedConnectionsWithModel() = runTest {
@@ -35,6 +35,20 @@ class DirectAdbTransportTest {
         transport.remove("usb-1")
         assertEquals(emptyList(), transport.devices())
         assertFailsWith<AdbException> { transport.shell("usb-1", listOf("echo", "hi")) }
+    }
+
+    @Test
+    fun unpluggedDeviceLeavesListAndReconnectReplacesOldConnection() = runTest {
+        val (transport, device) = connected()
+        val (channel2, _) = fakeDevice(backgroundScope)
+        val second = AdbConnection.connect(channel2, key, "me@test", backgroundScope)
+        transport.add("usb-1", second)
+        assertEquals(1, transport.devices().size, "같은 기기는 하나만")
+        device.unplug() // 첫 연결이 끊겨도 새 연결은 남는다
+        delay(100)
+        assertEquals(listOf("usb-1"), transport.devices().map { it.serial })
+        second.close()
+        awaitUntil { transport.devices().isEmpty() }
     }
 
     @Test

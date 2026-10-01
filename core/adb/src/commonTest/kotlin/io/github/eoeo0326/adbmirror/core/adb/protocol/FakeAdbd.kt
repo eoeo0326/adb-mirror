@@ -30,6 +30,9 @@ internal class FakeAdbd(private val io: AdbChannel, private val knowsKey: Boolea
     val received = mutableListOf<String>()
     var publicKey: String? = null
 
+    /** USB를 뽑은 것처럼 기기 쪽에서 끊는다. */
+    suspend fun unplug() = io.close()
+
     /** 닫힐 때까지 둔 스트림. 클라이언트가 CLSE를 보내면 [clientClosed]에 들어간다. */
     val closedByClient = mutableSetOf<Int>()
     val clientClosed = mutableListOf<Int>()

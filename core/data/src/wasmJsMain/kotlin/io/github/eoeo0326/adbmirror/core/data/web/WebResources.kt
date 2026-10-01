@@ -8,26 +8,29 @@ import io.github.eoeo0326.adbmirror.core.data.storage.TextStore
 import kotlinx.coroutines.await
 import kotlin.js.Promise
 
+/** 응답 본문(`Uint8Array`). 호출마다 따로 돌려줘 동시에 받아도 섞이지 않는다. */
 @JsFun(
     """async (url) => {
   const r = await fetch(url);
   if (!r.ok) throw new Error(url + ' ' + r.status);
-  globalThis.__adbMirrorFetched = new Uint8Array(await r.arrayBuffer());
-  return globalThis.__adbMirrorFetched.length;
+  return new Uint8Array(await r.arrayBuffer());
 }""",
 )
-private external fun fetchBytes(url: String): Promise<JsNumber>
+private external fun fetchBytes(url: String): Promise<JsAny>
 
-@JsFun("(i) => globalThis.__adbMirrorFetched[i]")
-private external fun fetchedByte(index: Int): Int
+@JsFun("(a) => a.length")
+private external fun bytesLength(array: JsAny): Int
+
+@JsFun("(a, i) => a[i]")
+private external fun byteAt(array: JsAny, index: Int): Int
 
 @JsFun("async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(url + ' ' + r.status); return await r.text(); }")
 private external fun fetchText(url: String): Promise<JsString>
 
 /** 웹앱과 함께 배포한 파일([url]은 페이지 기준 상대 경로)을 받아 온다. */
 suspend fun fetchResource(url: String): ByteArray {
-    val size = fetchBytes(url).await<JsNumber>().toInt()
-    return ByteArray(size) { fetchedByte(it).toByte() }
+    val data = fetchBytes(url).await<JsAny>()
+    return ByteArray(bytesLength(data)) { byteAt(data, it).toByte() }
 }
 
 /** 웹앱과 함께 배포한 scrcpy-server(빌드할 때 Gradle이 받아 넣음)를 받아 온다. */

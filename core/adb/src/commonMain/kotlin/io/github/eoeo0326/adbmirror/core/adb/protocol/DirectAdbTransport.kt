@@ -22,11 +22,24 @@ import kotlinx.coroutines.withContext
 class DirectAdbTransport(private val scope: CoroutineScope) : AdbTransport {
     private val connections = MutableStateFlow<Map<String, AdbConnection>>(emptyMap())
 
-    fun add(serial: String, connection: AdbConnection) = connections.update { it + (serial to connection) }
+    /**
+     * 연결을 목록에 넣는다. 같은 기기의 이전 연결은 닫는다(두 읽기 루프가 같은 엔드포인트를 나눠 읽지 않게).
+     * 연결이 끊기면(USB를 뽑음) 목록에서 뺀다.
+     */
+    suspend fun add(serial: String, connection: AdbConnection) {
+        var previous: AdbConnection? = null
+        connections.update { previous = it[serial]; it + (serial to connection) }
+        previous?.takeIf { it !== connection }?.close()
+        scope.launch {
+            connection.awaitClosed()
+            connections.update { if (it[serial] === connection) it - serial else it }
+        }
+    }
 
+    /** 이 기기의 연결을 닫고 목록에서 뺀다. 없으면 아무것도 하지 않는다. */
     suspend fun remove(serial: String) {
-        val removed = connections.value[serial]
-        connections.update { it - serial }
+        var removed: AdbConnection? = null
+        connections.update { removed = it[serial]; it - serial }
         removed?.close()
     }
 
