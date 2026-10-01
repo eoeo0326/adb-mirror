@@ -8,6 +8,8 @@
 - Android 앱: 무선 디버깅 기기 페어링·연결(Kadb), 앱 adb 키를 백업되지 않는 앱 저장소에 보관해 한 번 페어링하면 다시 연결만 하면 됨
 - Android 앱 미러링: MediaCodec 하드웨어 디코더가 SurfaceView에 바로 그림, 영상 위 터치를 기기로 전달, 앱을 나갔다 오면 key frame을 다시 받아 이어서 표시
 - Android 앱 스크린샷·녹화·변환: 스크린샷은 클립보드 복사와 `Pictures/ADB Mirror` 저장, 녹화는 `Movies/ADB Mirror`, GIF·WebP 변환(MediaCodec 디코더·내장 WebP 인코더)은 `Pictures/ADB Mirror`. 저장소 권한이 필요 없음(Android 9 이하는 앱 전용 폴더)
+- Android 앱 무선 기기 찾기: 같은 네트워크의 무선 디버깅 기기를 mDNS로 찾아 목록에서 눌러 연결, 페어링 창을 연 기기의 페어링 포트를 자동으로 채움
+- Android 앱이 연결했던 무선 기기를 기억해 다음 실행 때 다시 연결(무선 디버깅을 다시 켜 포트가 바뀌어도 찾아서 연결), "끊기"를 누르면 잊음
 
 ### 수정
 - 앱이 강제 종료되거나 Desktop 앱이 비정상 종료돼 기기에 남은 scrcpy 서버를, 다음에 같은 기기에 연결할 때 정리함(띄운 서버의 scid를 앱 저장소에 기록)

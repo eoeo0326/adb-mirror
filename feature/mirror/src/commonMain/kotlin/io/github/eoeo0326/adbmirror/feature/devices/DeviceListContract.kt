@@ -1,6 +1,7 @@
 package io.github.eoeo0326.adbmirror.feature.devices
 
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.model.isSelectable
 
 /** 기기 목록 화면(창). 기기가 하나여도 자동으로 고르거나 열지 않는다. */
@@ -20,6 +21,7 @@ data class DeviceListState(
 /**
  * 무선 기기 추가 입력. 기기의 설정 > 개발자 옵션 > 무선 디버깅 화면 값을 옮겨 적는다.
  * 페어링 포트·코드는 "페어링 코드로 기기 페어링" 창의 값, 연결 포트는 무선 디버깅 화면의 "IP 주소 및 포트" 값이다.
+ * 같은 네트워크에서 찾은 서비스([found])는 목록으로 보여 주고, 페어링 칸은 [autofilled]로 채운다.
  */
 data class WirelessForm(
     val host: String = "",
@@ -29,7 +31,20 @@ data class WirelessForm(
     val busy: Boolean = false,
     val message: String? = null,
     val failed: Boolean = false,
-)
+    /** mDNS로 찾은 무선 디버깅 서비스. 찾기를 지원하지 않으면 늘 비어 있다. */
+    val found: List<WirelessService> = emptyList(),
+) {
+    /**
+     * 찾은 페어링 서비스로 비어 있는 페어링 칸을 채운다. 페어링 서비스는 누군가 "페어링 코드로 기기 페어링" 창을
+     * 열어 둔 동안만 보여서 후보가 하나면 거의 지금 페어링하려는 기기다. 주소를 입력해 두었으면 그 주소의 서비스만 본다.
+     * 연결 서비스는 같은 네트워크의 다른 사람 기기일 수 있어(찾는 순서도 제각각) 채우지 않고 목록에서 고르게 한다.
+     */
+    fun autofilled(): WirelessForm {
+        if (busy || pairPort.isNotBlank()) return this
+        val pairing = found.filter { it.kind == WirelessService.Kind.Pairing && (host.isBlank() || it.host == host) }.singleOrNull()
+        return pairing?.let { copy(host = it.host, pairPort = it.port.toString()) } ?: this
+    }
+}
 
 sealed interface DeviceListIntent {
     data class Select(val serial: String) : DeviceListIntent
@@ -40,6 +55,8 @@ sealed interface DeviceListIntent {
     data object Pair : DeviceListIntent
     data object ConnectWireless : DeviceListIntent
     data class Disconnect(val serial: String) : DeviceListIntent
+    /** 찾은 서비스를 고른다. 페어링 서비스는 주소·포트를 채우고, 연결 서비스는 채운 뒤 바로 연결한다. */
+    data class UseService(val service: WirelessService) : DeviceListIntent
 }
 
 sealed interface DeviceListResult {
@@ -50,6 +67,7 @@ sealed interface DeviceListResult {
     data class WirelessEdited(val form: WirelessForm) : DeviceListResult
     data class WirelessStarted(val message: String) : DeviceListResult
     data class WirelessFinished(val message: String, val failed: Boolean) : DeviceListResult
+    data class ServicesFound(val services: List<WirelessService>) : DeviceListResult
 }
 
 sealed interface DeviceListEffect {
@@ -70,8 +88,9 @@ object DeviceListReducer {
         is DeviceListResult.Closed -> state.copy(openSerials = state.openSerials - result.serial)
         // 입력을 고치면 지난 결과 문구는 지운다. 시도 중에는 입력을 바꾸지 않는다.
         is DeviceListResult.WirelessEdited ->
-            state.wireless?.takeIf { !it.busy }?.let { state.copy(wireless = result.form.copy(busy = false, message = null, failed = false)) } ?: state
+            state.wireless?.takeIf { !it.busy }?.let { state.copy(wireless = result.form.copy(busy = false, message = null, failed = false, found = it.found)) } ?: state
         is DeviceListResult.WirelessStarted -> state.copy(wireless = state.wireless?.copy(busy = true, message = result.message, failed = false))
         is DeviceListResult.WirelessFinished -> state.copy(wireless = state.wireless?.copy(busy = false, message = result.message, failed = result.failed))
+        is DeviceListResult.ServicesFound -> state.copy(wireless = state.wireless?.copy(found = result.services)?.autofilled())
     }
 }

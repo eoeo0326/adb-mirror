@@ -1,7 +1,11 @@
 package io.github.eoeo0326.adbmirror.core.domain.usecase
 
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessEndpoint
+import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.repository.WirelessDeviceRepository
+import io.github.eoeo0326.adbmirror.core.domain.repository.WirelessDiscoveryRepository
+import kotlinx.coroutines.flow.Flow
 
 /** 입력한 주소·포트·코드의 문제. 비어 있으면 시도할 수 있다. */
 object WirelessInput {
@@ -32,4 +36,12 @@ class ConnectWirelessDeviceUseCase(private val wireless: WirelessDeviceRepositor
 
 class DisconnectWirelessDeviceUseCase(private val wireless: WirelessDeviceRepository) {
     suspend operator fun invoke(serial: String) = wireless.disconnect(serial)
+}
+
+class GetKnownWirelessDevicesUseCase(private val wireless: WirelessDeviceRepository) {
+    suspend operator fun invoke(): List<WirelessEndpoint> = wireless.known()
+}
+
+class DiscoverWirelessServicesUseCase(private val discovery: WirelessDiscoveryRepository) {
+    operator fun invoke(): Flow<List<WirelessService>> = discovery.services()
 }
