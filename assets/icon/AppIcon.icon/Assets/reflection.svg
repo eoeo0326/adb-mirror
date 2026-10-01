@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="100 100 824 824" width="1024" height="1024">
+  <defs>
+    <clipPath id="band1"><rect x="0" y="716" width="1024" height="34"/></clipPath>
+    <clipPath id="band2"><rect x="0" y="750" width="1024" height="30"/></clipPath>
+    <clipPath id="band3"><rect x="0" y="780" width="1024" height="28"/></clipPath>
+  </defs>
+  <g clip-path="url(#band1)" opacity="0.30"><rect x="456" y="744" width="220" height="440" rx="48" fill="none" stroke="#2FB38A" stroke-width="26" opacity="0.4"/><rect x="348" y="724" width="220" height="440" rx="48" fill="none" stroke="#2FB38A" stroke-width="26"/></g>
+  <g clip-path="url(#band2)" opacity="0.16"><rect x="456" y="744" width="220" height="440" rx="48" fill="none" stroke="#2FB38A" stroke-width="26" opacity="0.4"/><rect x="348" y="724" width="220" height="440" rx="48" fill="none" stroke="#2FB38A" stroke-width="26"/></g>
+  <g clip-path="url(#band3)" opacity="0.06"><rect x="456" y="744" width="220" height="440" rx="48" fill="none" stroke="#2FB38A" stroke-width="26" opacity="0.4"/><rect x="348" y="724" width="220" height="440" rx="48" fill="none" stroke="#2FB38A" stroke-width="26"/></g>
+</svg>
