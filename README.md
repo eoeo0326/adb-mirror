@@ -6,7 +6,7 @@ adb로 연결한 Android 기기 화면을 데스크톱 창에 띄우고, 마우�
 
 기기 쪽 인코더로 [scrcpy](https://github.com/Genymobile/scrcpy)의 `scrcpy-server`만 사용합니다. 받은 H.264 영상은 macOS의 VideoToolbox로 직접 디코딩해 표시하므로 scrcpy나 FFmpeg를 따로 설치할 필요가 없습니다.
 
-> 지금 쓸 수 있는 앱은 `macos-swift/`의 macOS용 Swift 프로토타입입니다. Kotlin Multiplatform + Compose Multiplatform으로 옮겨 macOS·Windows·Linux·Android·Web(Chromium)에서 쓰도록 확장할 계획입니다. 자세한 내용은 [로드맵](docs/ROADMAP.md)을 참고하세요.
+> Kotlin Multiplatform + Compose Multiplatform 앱이 Desktop(macOS·Windows·Linux)과 Android에서 동작합니다. Web(Chromium)은 준비 중입니다. 처음 만든 macOS용 Swift 프로토타입은 `macos-swift/`에 있습니다. 자세한 내용은 [로드맵](docs/ROADMAP.md)을 참고하세요.
 
 ## 기능
 
@@ -41,7 +41,7 @@ swift build -c release
 .build/release/adb-mirror
 ```
 
-## KMP 앱 (Desktop 사용 가능 · Android·Web 준비 중)
+## KMP 앱 (Desktop·Android 사용 가능 · Web 준비 중)
 
 Kotlin Multiplatform + Compose Multiplatform 버전입니다. Desktop에서 기기 선택 → 미러링 → 터치, 클릭 이펙트, 스크린샷, MP4 녹화, GIF·WebP 변환, 설정 저장까지 됩니다. macOS·Windows·Linux 설치 파일과 포터블은 [Releases](https://github.com/eoeo0326/adb-mirror/releases)에서 받을 수 있습니다.
 
@@ -58,6 +58,19 @@ ADB_MIRROR_HWDECODE=0 ./gradlew :composeApp:run   # 하드웨어 디코딩 끄�
 ADB_MIRROR_GPU_YUV=0 ./gradlew :composeApp:run    # GPU YUV 그리기 끄기(BGRA로 그림)
 scripts/measure-cpu.sh <serial> 10                # 스크롤하며 10초간 CPU 평균·최대
 ```
+
+### Android 앱
+
+다른 기기(또는 이 폰 자신)에 무선 디버깅(Android 11+)으로 붙어 미러링합니다. USB 케이블이나 PC가 필요 없습니다.
+
+1. 미러링할 기기에서 설정 > 개발자 옵션 > 무선 디버깅을 켭니다.
+2. 처음 한 번은 페어링합니다.
+   - 다른 기기: 그 기기에서 "페어링 코드로 기기 페어링"을 열고, 앱에 코드를 입력해 페어링합니다. 같은 Wi-Fi면 페어링 포트가 자동으로 채워집니다.
+   - 이 폰 자신: "알림으로 이 폰 페어링"을 누르고, 열린 설정에서 페어링 창을 띄운 채 코드를 알림 답장으로 입력합니다.
+3. "이 네트워크에서 찾음" 목록에서 기기를 누르면 연결됩니다. 연결했던 기기는 다음 실행 때 자동으로 다시 연결합니다(무선 디버깅을 다시 켜 포트가 바뀌어도 찾아서 연결).
+4. 기기를 고르고 "미러링 시작"을 누릅니다. 메뉴에서 스크린샷 복사·저장, 녹화, GIF·WebP 변환을 할 수 있습니다.
+
+저장 위치는 스크린샷·GIF·WebP가 `Pictures/ADB Mirror`, 녹화가 `Movies/ADB Mirror`입니다. 저장소 권한은 필요 없습니다. Android 9 이하는 앱 전용 폴더(`Android/data/…`)에 저장합니다.
 
 ### 설치 파일 만들기
 

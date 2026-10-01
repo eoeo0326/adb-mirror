@@ -8,6 +8,7 @@
     <application
         android:name="io.github.eoeo0326.adbmirror.AdbMirrorApplication"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="ADB Mirror"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
