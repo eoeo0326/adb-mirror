@@ -61,6 +61,8 @@ class WebAppGraph {
      * [onWaitingForUser]가 불린다. 허용을 기다리는 시간은 1분이다.
      */
     suspend fun connect(device: UsbDevice, onWaitingForUser: () -> Unit): String {
+        // 같은 기기를 다시 고르면 이전 연결을 먼저 닫아 인터페이스를 놓게 한다.
+        transport.remove(WebUsbAdbChannel.serialOf(device))
         val channel = WebUsbAdbChannel.open(device)
         try {
             val key = WebAdbKeyStore.loadOrCreate()

@@ -4,6 +4,7 @@ package io.github.eoeo0326.adbmirror.core.adb.web
 
 import io.github.eoeo0326.adbmirror.core.adb.EndOfStreamException
 import io.github.eoeo0326.adbmirror.core.adb.protocol.AdbChannel
+import io.github.eoeo0326.adbmirror.core.adb.protocol.AdbConnection
 import kotlinx.coroutines.await
 import kotlin.js.Promise
 
@@ -61,57 +62,58 @@ private external fun openAndClaim(device: UsbDevice, configuration: Int, interfa
 @JsFun("async (d, iface) => { try { await d.releaseInterface(iface); } catch (e) {} try { await d.close(); } catch (e) {} }")
 private external fun releaseAndClose(device: UsbDevice, interfaceNumber: Int): Promise<JsAny?>
 
-/** 받은 데이터를 JS 쪽에 붙잡아 두고 길이를 돌려준다(바이트는 [takeByte]로 꺼냄). 기기가 끊기면 -1. */
+/** 받은 데이터(`Uint8Array`). 기기가 끊기면 null. 호출마다 따로 돌려줘 동시에 불러도 섞이지 않는다. */
 @JsFun(
     """async (d, ep, length) => {
   const r = await d.transferIn(ep, length);
-  if (r.status !== 'ok' || !r.data) return -1;
-  globalThis.__adbMirrorIn = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
-  return r.data.byteLength;
+  if (r.status !== 'ok' || !r.data) return null;
+  return new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
 }""",
 )
-private external fun transferIn(device: UsbDevice, endpoint: Int, length: Int): Promise<JsNumber>
+private external fun transferIn(device: UsbDevice, endpoint: Int, length: Int): Promise<JsAny?>
 
-@JsFun("(i) => globalThis.__adbMirrorIn[i]")
-private external fun takeByte(index: Int): Int
+@JsFun("(n) => new Uint8Array(n)")
+internal external fun newBytes(length: Int): JsAny
 
-@JsFun("(n) => { globalThis.__adbMirrorOut = new Uint8Array(n); }")
-private external fun beginOut(length: Int)
+@JsFun("(a) => a.length")
+internal external fun bytesLength(array: JsAny): Int
 
-@JsFun("(i, v) => { globalThis.__adbMirrorOut[i] = v; }")
-private external fun putByte(index: Int, value: Int)
+@JsFun("(a, i) => a[i]")
+internal external fun byteAt(array: JsAny, index: Int): Int
 
-@JsFun("(d, ep) => d.transferOut(ep, globalThis.__adbMirrorOut).then(r => r.status === 'ok')")
-private external fun transferOut(device: UsbDevice, endpoint: Int): Promise<JsBoolean>
+@JsFun("(a, i, v) => { a[i] = v; }")
+internal external fun setByteAt(array: JsAny, index: Int, value: Int)
 
-@JsFun("(d, ep) => d.transferOut(ep, new Uint8Array(0)).then(r => r.status === 'ok')")
-private external fun transferZeroLength(device: UsbDevice, endpoint: Int): Promise<JsBoolean>
+/** JS `Uint8Array` → [ByteArray]. Kotlin/Wasm과 JS는 메모리를 공유하지 않아 한 바이트씩 옮긴다. */
+internal fun JsAny.toByteArray(): ByteArray = ByteArray(bytesLength(this)) { byteAt(this, it).toByte() }
+
+internal fun ByteArray.toUint8Array(): JsAny = newBytes(size).also { a -> forEachIndexed { i, b -> setByteAt(a, i, b.toInt() and 0xFF) } }
+
+@JsFun("(d, ep, data) => d.transferOut(ep, data).then(r => r.status === 'ok')")
+private external fun transferOut(device: UsbDevice, endpoint: Int, data: JsAny): Promise<JsBoolean>
 
 /**
  * WebUSB bulk 엔드포인트 위의 [AdbChannel]. adb는 헤더와 payload를 따로 보내므로 요청한 만큼만 받는다.
  * 보낼 길이가 패킷 크기의 배수면 끝을 알리려고 길이 0 전송을 덧붙인다(adb 호스트와 같음).
- * 바이트는 JS 배열과 한 개씩 주고받는다(Kotlin/Wasm과 JS가 메모리를 공유하지 않음).
+ * 읽기는 [AdbConnection]의 읽기 루프 하나, 쓰기는 그 연결의 쓰기 락 아래에서만 부른다.
  */
 class WebUsbAdbChannel private constructor(private val device: UsbDevice, private val iface: AdbInterface) : AdbChannel {
     private var buffer = ByteArray(0)
 
-    val serial: String = device.serialNumber?.takeIf { it.isNotBlank() } ?: "usb-${device.productName ?: "device"}"
+    val serial: String = serialOf(device)
     val productName: String? = device.productName
 
     override suspend fun readFully(count: Int): ByteArray {
         while (buffer.size < count) {
-            val n = transferIn(device, iface.inEndpoint, count - buffer.size).await<JsNumber>().toInt()
-            if (n < 0) throw EndOfStreamException("USB 연결이 끊겼습니다")
-            buffer += ByteArray(n) { takeByte(it).toByte() }
+            val data = transferIn(device, iface.inEndpoint, count - buffer.size).await<JsAny?>() ?: throw EndOfStreamException("USB 연결이 끊겼습니다")
+            buffer += data.toByteArray()
         }
         return buffer.copyOf(count).also { buffer = buffer.copyOfRange(count, buffer.size) }
     }
 
     override suspend fun write(bytes: ByteArray) {
-        beginOut(bytes.size)
-        for (i in bytes.indices) putByte(i, bytes[i].toInt() and 0xFF)
-        if (!transferOut(device, iface.outEndpoint).await<JsBoolean>().toBoolean()) throw EndOfStreamException("USB로 보내지 못했습니다")
-        if (bytes.isNotEmpty() && bytes.size % iface.packetSize == 0) transferZeroLength(device, iface.outEndpoint).await<JsBoolean>()
+        if (!transferOut(device, iface.outEndpoint, bytes.toUint8Array()).await<JsBoolean>().toBoolean()) throw EndOfStreamException("USB로 보내지 못했습니다")
+        if (bytes.isNotEmpty() && bytes.size % iface.packetSize == 0) transferOut(device, iface.outEndpoint, newBytes(0)).await<JsBoolean>()
     }
 
     override suspend fun close() {
@@ -132,6 +134,9 @@ class WebUsbAdbChannel private constructor(private val device: UsbDevice, privat
             }
             return WebUsbAdbChannel(device, iface)
         }
+
+        /** 기기 목록에 쓰는 serial. USB 일련번호가 없으면 제품 이름으로 만든다. */
+        fun serialOf(device: UsbDevice): String = device.serialNumber?.takeIf { it.isNotBlank() } ?: "usb-${device.productName ?: "device"}"
 
         /** 전에 허용한 기기들. */
         suspend fun permitted(): List<UsbDevice> {

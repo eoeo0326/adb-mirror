@@ -36,10 +36,14 @@ class AdbConnection private constructor(
     private val opening = mutableMapOf<Int, CompletableDeferred<AdbStream>>()
     private var nextId = 1
     private var failure: Throwable? = null
+    private val ended = CompletableDeferred<Unit>()
 
     init {
         scope.launch { readLoop() }
     }
+
+    /** 연결이 끊기거나 [close]할 때까지 기다린다(USB를 뽑으면 읽기 루프가 끝남). */
+    suspend fun awaitClosed() = ended.await()
 
     /** banner의 `ro.product.model` 값. */
     val model: String? get() = bannerProperty("ro.product.model")
@@ -159,6 +163,7 @@ class AdbConnection private constructor(
         }
         pending.forEach { it.completeExceptionally(cause) }
         open.forEach { it.closedByDevice() }
+        ended.complete(Unit)
     }
 
     private suspend fun send(message: AdbMessage) = writeLock.withLock { channel.write(message.encode()) }
