@@ -17,7 +17,7 @@
 다시 캡처하려면 개인정보가 없는 화면을 띄운 뒤 다음을 실행합니다.
 
 ```bash
-./scripts/fetch-server.sh
+./gradlew :core:data:fetchScrcpyServer
 python3 scripts/capture_fixture.py -s <serial> --name scrcpy-v4.1-h264-rotate --seconds 8 --rotate
 ```
 

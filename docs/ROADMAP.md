@@ -1,6 +1,6 @@
 # 로드맵
 
-지금은 macOS 전용 Swift 프로토타입입니다. 이 앱을 **Kotlin Multiplatform + Compose Multiplatform**으로 옮겨 아래 플랫폼을 지원하는 것이 목표입니다.
+처음 만든 macOS 전용 Swift 프로토타입을 **Kotlin Multiplatform + Compose Multiplatform**으로 옮겨 아래 플랫폼을 지원합니다. Phase 4까지 끝나 Swift 프로토타입은 지웠습니다.
 
 | 호스트 | ADB 전송 | 영상 디코딩 | 배포 |
 |---|---|---|---|
