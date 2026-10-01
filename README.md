@@ -59,6 +59,19 @@ ADB_MIRROR_GPU_YUV=0 ./gradlew :composeApp:run    # GPU YUV 그리기 끄기(BGR
 scripts/measure-cpu.sh <serial> 10                # 스크롤하며 10초간 CPU 평균·최대
 ```
 
+### macOS에서 처음 열기
+
+Apple 개발자 서명·공증을 하지 않은 앱이라, Releases에서 받은 앱을 처음 열면 "확인되지 않은 개발자" 경고가 뜨고 열리지 않습니다. 아래 둘 중 한 가지를 한 번만 하면 그다음부터는 바로 열립니다.
+
+- 앱을 한 번 열어 경고를 닫은 뒤, 시스템 설정 → 개인정보 보호 및 보안 아래쪽의 "그래도 열기"를 누르고 암호를 입력합니다.
+- 터미널에서 다운로드 표시(격리 속성)를 지웁니다.
+
+  ```bash
+  xattr -dr com.apple.quarantine "/Applications/ADB Mirror.app"
+  ```
+
+macOS 14 이하에서는 Finder에서 앱을 우클릭 → 열기로도 열 수 있습니다. macOS 15부터는 이 방법이 없어졌습니다.
+
 ### Android 앱
 
 다른 기기(또는 이 폰 자신)에 무선 디버깅(Android 11+)으로 붙어 미러링합니다. USB 케이블이나 PC가 필요 없습니다.
@@ -85,7 +98,7 @@ scripts/measure-cpu.sh <serial> 10                # 스크롤하며 10초간 CPU
 - `./gradlew :composeApp:packageDistributions`는 이 OS의 설치 파일과 포터블 배포본을 `composeApp/build/release/`에 `ADB-Mirror-<버전>-<os>-<arch>.<확장자>` 이름으로 모읍니다.
   - 포터블: Windows `…-portable.zip`, Linux `…-portable.tar.gz`. 풀어서 바로 실행하고, 설정은 풀린 폴더의 `data/`에 저장됩니다(`portable` 파일을 지우면 설치형처럼 사용자 폴더에 저장). macOS는 앱 번들 안에 쓸 수 없어 포터블을 만들지 않습니다.
 - 버전은 `gradle.properties`의 `appVersion`(MAJOR.MINOR.PATCH)입니다. macOS 패키지는 첫 숫자가 0이면 만들 수 없어서, 1.0 전까지는 macOS 패키지 버전만 첫 숫자를 1로 씁니다(0.3.0 → 1.3.0).
-- 아직 Apple 개발자 서명·공증을 하지 않았습니다. 받은 dmg의 앱이 열리지 않으면 Finder에서 우클릭 → 열기를 누르세요.
+- 아직 Apple 개발자 서명·공증을 하지 않아 ad-hoc 서명으로 만듭니다. 받은 앱을 여는 방법은 [macOS에서 처음 열기](#macos에서-처음-열기)를 보세요.
 
 ### CI와 릴리즈
 
