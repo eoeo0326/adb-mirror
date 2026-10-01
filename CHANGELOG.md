@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-01
+
+Phase 3(Android) 완료 릴리즈입니다. Android 앱이 무선 디버깅으로 다른 기기나 이 폰 자신에 붙어 미러링·터치·스크린샷·녹화·GIF/WebP 변환을 합니다. USB 케이블과 PC가 필요 없습니다. Desktop 설치 파일과 포터블은 이 릴리즈의 첨부 파일에 있습니다.
+
 ### 추가
 - Android 앱: 무선 디버깅 기기 페어링·연결(Kadb), 앱 adb 키를 백업되지 않는 앱 저장소에 보관해 한 번 페어링하면 다시 연결만 하면 됨
 - Android 앱 미러링: MediaCodec 하드웨어 디코더가 SurfaceView에 바로 그림, 영상 위 터치를 기기로 전달, 앱을 나갔다 오면 key frame을 다시 받아 이어서 표시
@@ -15,6 +19,13 @@
 
 ### 수정
 - 앱이 강제 종료되거나 Desktop 앱이 비정상 종료돼 기기에 남은 scrcpy 서버를, 다음에 같은 기기에 연결할 때 정리함(띄운 서버의 scid를 앱 저장소에 기록)
+
+### 알려진 제한
+- Android 앱 설치 파일(APK)은 이 릴리즈에 없습니다. `./gradlew :androidApp:installDebug`로 빌드해 설치합니다
+- 앱에서 녹화한 MP4(fragmented)는 갤러리에 길이가 0으로 보입니다(재생은 됨, Desktop 녹화도 같음)
+- macOS 앱은 아직 Apple 개발자 서명·공증 전이라 처음 열 때 Finder에서 우클릭 → 열기가 필요합니다
+- 1.0 전까지 macOS 패키지 내부 버전은 첫 숫자를 1로 씁니다(jpackage 제한, 이 릴리즈는 1.5.0)
+- Web 앱은 Phase 4에서 이어 갑니다
 
 ## [0.4.0] - 2026-09-30
 
@@ -79,7 +90,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.1.0...v0.2.0
