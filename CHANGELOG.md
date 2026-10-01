@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-01
+
+Phase 4(Web) 완료 릴리즈입니다. Chrome·Edge에서 **https://eoeo0326.github.io/adb-mirror/** 를 열면 adb나 다른 프로그램을 설치하지 않고 USB로 기기를 미러링할 수 있습니다. 브라우저가 WebUSB로 adbd와 직접 말합니다. Desktop 설치 파일과 포터블은 이 릴리즈의 첨부 파일에 있습니다.
+
 ### 추가
 - Web 앱(Chromium): WebUSB로 adb 없이 기기에 붙어 미러링(WebCodecs)·터치, 스크린샷 복사(클립보드)·저장(다운로드), MP4 녹화(OPFS에 쓰고 다운로드). WebUSB가 없는 브라우저에는 안내 화면
 - Web 앱을 GitHub Pages(https://eoeo0326.github.io/adb-mirror/)로 배포
@@ -11,6 +15,14 @@
 
 ### 수정
 - macOS 26에서 앱 아이콘이 흰 판 위에 작게 보이던 문제. Icon Composer 형식 아이콘(`Assets.car`)을 앱에 넣고, macOS 15 이하는 기존 icns를 그대로 씀
+
+### 알려진 제한
+- Web: 쓰기 전에 이 컴퓨터의 adb 서버를 꺼야 합니다(`adb kill-server`). adb 서버가 USB를 차지합니다
+- Web: GIF·WebP 변환은 지원하지 않습니다(Desktop·Android에서 가능)
+- Web: 브라우저의 adb 키는 그 사이트의 localStorage에 있습니다. 공용 컴퓨터에서는 사이트 데이터를 지우세요
+- Android 앱 설치 파일(APK)은 아직 릴리즈에 없습니다(`./gradlew :androidApp:installDebug`)
+- macOS 앱은 Apple 개발자 서명·공증 전이라 처음 열 때 Finder에서 우클릭 → 열기가 필요합니다
+- 1.0 전까지 macOS 패키지 내부 버전은 첫 숫자를 1로 씁니다(jpackage 제한, 이 릴리즈는 1.6.0)
 
 ## [0.5.0] - 2026-10-01
 
@@ -98,7 +110,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.2.0...v0.3.0
