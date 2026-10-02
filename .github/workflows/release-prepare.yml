@@ -1,0 +1,45 @@
+name: Release 준비
+
+# develop에서 release/vX.Y.Z를 만들고 main·develop 양쪽에 PR을 연다(scripts/release.sh와 같은 동작).
+# RELEASE_TOKEN(개인 토큰) 시크릿이 없으면 GITHUB_TOKEN으로 PR을 만든다. 그 PR에서는 CI가 자동으로 돌지 않아
+# release 브랜치에 build.yml을 직접 실행한다.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "새 버전(X.Y.Z)"
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  group: release-prepare
+
+jobs:
+  prepare:
+    name: release/v${{ inputs.version }}
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      HAS_RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN != '' }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: develop
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - name: 커밋 작성자
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: release 브랜치와 PR 만들기
+        run: scripts/release.sh "$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: release 브랜치 빌드 실행
+        if: env.HAS_RELEASE_TOKEN != 'true'
+        run: |
+          gh workflow run build.yml --ref "release/v$VERSION"
+          echo "GITHUB_TOKEN으로 만든 PR이라 CI가 자동으로 돌지 않아, release/v$VERSION 에 Build를 직접 실행했습니다: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/workflows/build.yml" >> "$GITHUB_STEP_SUMMARY"
