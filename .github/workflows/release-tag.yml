@@ -1,0 +1,47 @@
+name: Release 태그
+
+# main에 release/vX.Y.Z PR이 머지되면 머지 커밋에 vX.Y.Z 태그를 만들고 build.yml로 릴리즈한다.
+# GITHUB_TOKEN으로 만든 태그 push는 다른 workflow를 깨우지 않으므로, build.yml을 그 태그로 직접 실행한다.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    name: 태그·릴리즈
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_REF: ${{ github.event.pull_request.head.ref }}
+      MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+      - name: 버전 확인
+        id: version
+        run: |
+          tag="${HEAD_REF#release/}"
+          app="$(sed -n 's/^appVersion=//p' gradle.properties)"
+          if [ "v$app" != "$tag" ]; then
+            echo "::error::브랜치($HEAD_REF)와 appVersion($app)이 다릅니다"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - name: 태그 만들기
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "::warning::태그 $TAG 가 이미 있어 만들지 않습니다"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$MERGE_SHA" >/dev/null
+          fi
+          gh workflow run build.yml --ref "$TAG"
+          echo "$TAG 태그($MERGE_SHA)로 Build를 실행했습니다. release job이 GitHub Release를 만듭니다." >> "$GITHUB_STEP_SUMMARY"
