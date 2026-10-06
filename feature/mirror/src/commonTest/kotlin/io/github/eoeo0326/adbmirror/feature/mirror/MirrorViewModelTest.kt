@@ -22,11 +22,8 @@ import io.github.eoeo0326.adbmirror.core.domain.repository.RecordingRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.ScreenshotRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
-import io.github.eoeo0326.adbmirror.core.domain.usecase.ConvertRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
-import io.github.eoeo0326.adbmirror.core.domain.usecase.GetConversionFormatsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
-import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
@@ -45,8 +42,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -150,22 +145,9 @@ class MirrorViewModelTest {
         override suspend fun stop(serial: String): Recording? =
             if (recordingActive.remove(serial)) Recording(serial, recordedFiles, 1000, recordedLocations ?: recordedFiles) else null
         override suspend fun info(file: String) = VideoInfo(4_000, 340, 720)
-        override fun supportedFormats() = formats
-        override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = flow {
-            convertedWith = options
-            convertedFiles = files
-            emit(ConversionProgress.Running(0.5f))
-            conversionGate?.await()
-            failConversion?.let { error(it) }
-            emit(ConversionProgress.Done(files.first().removeSuffix(".mp4") + ".gif"))
-        }.onCompletion { cause -> if (cause is kotlinx.coroutines.CancellationException) conversionCancelled = true }
+        override fun supportedFormats() = emptySet<AnimatedFormat>()
+        override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = emptyFlow()
     }
-    private var formats = AnimatedFormat.entries.toSet()
-    private var convertedWith: ConversionOptions? = null
-    private var convertedFiles: List<String>? = null
-    private var conversionGate: CompletableDeferred<Unit>? = null
-    private var failConversion: String? = null
-    private var conversionCancelled = false
 
     private fun viewModel() = MirrorViewModel(
         device = device,
@@ -180,9 +162,6 @@ class MirrorViewModelTest {
         saveScreenshot = SaveScreenshotUseCase(screenshotRepo, settingsRepo),
         startRecording = StartRecordingUseCase(recordingRepo, settingsRepo),
         stopRecording = StopRecordingUseCase(recordingRepo),
-        getVideoInfo = GetVideoInfoUseCase(recordingRepo),
-        getConversionFormats = GetConversionFormatsUseCase(recordingRepo),
-        convertRecording = ConvertRecordingUseCase(recordingRepo),
     )
 
     @BeforeTest fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -527,103 +506,9 @@ class MirrorViewModelTest {
     }
 
     @Test
-    fun openConversionLoadsInfoAndClampsWidth() = runTest {
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        val draft = vm.state.value.conversionDraft!!
-        assertEquals(VideoInfo(4_000, 340, 720), draft.info)
-        assertEquals(340, draft.options.width) // 기본 480이지만 원본보다 키우지 않는다
-        assertEquals(AnimatedFormat.entries.toSet(), draft.formats)
-    }
-
-    @Test
-    fun conversionUnavailableOnPlatformShowsMessageInsteadOfPanel() = runTest {
-        formats = emptySet() // 웹: 변환 없음
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        assertNull(vm.state.value.conversionDraft)
-        assertEquals(MirrorEffect.ShowMessage("이 플랫폼에서는 GIF·WebP 변환을 지원하지 않습니다"), vm.effects.first())
-    }
-
-    @Test
-    fun convertReportsProgressAndDone() = runTest {
-        val gate = CompletableDeferred<Unit>().also { conversionGate = it }
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        vm.onIntent(MirrorIntent.ChangeConversionOptions(vm.state.value.conversionDraft!!.options.copy(fps = 15)))
-        vm.onIntent(MirrorIntent.Convert)
-        assertEquals(ConversionState.Converting(0.5f), vm.state.value.conversion)
-        assertEquals(15, convertedWith!!.fps)
-
-        // 변환하는 동안에는 옵션을 바꾸지 않는다
-        vm.onIntent(MirrorIntent.ChangeConversionOptions(convertedWith!!.copy(fps = 30)))
-        assertEquals(15, vm.state.value.conversionDraft!!.options.fps)
-
-        gate.complete(Unit)
-        assertEquals(ConversionState.Done("/out/a.gif"), vm.state.value.conversion)
-        assertEquals(MirrorEffect.ConversionDone("/out/a.gif"), vm.effects.first())
-        // 옵션을 바꾸면 지난 결과 문구는 사라진다
-        vm.onIntent(MirrorIntent.ChangeConversionOptions(convertedWith!!.copy(fps = 5)))
-        assertEquals(ConversionState.Idle, vm.state.value.conversion)
-    }
-
-    @Test
-    fun cancelStopsConversionFlow() = runTest {
-        conversionGate = CompletableDeferred()
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        vm.onIntent(MirrorIntent.Convert)
-        vm.onIntent(MirrorIntent.CancelConversion)
-        assertEquals(ConversionState.Idle, vm.state.value.conversion)
-        assertTrue(conversionCancelled)
-        assertTrue(vm.state.value.conversionDraft != null, "취소해도 화면은 남아 다시 변환할 수 있다")
-    }
-
-    @Test
-    fun closeWhileConvertingCancelsAndCloses() = runTest {
-        conversionGate = CompletableDeferred()
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        vm.onIntent(MirrorIntent.Convert)
-        vm.onIntent(MirrorIntent.CloseConversion)
-        assertTrue(conversionCancelled)
-        assertNull(vm.state.value.conversionDraft)
-    }
-
-    @Test
-    fun conversionFailureIsShownInPanel() = runTest {
-        failConversion = "디코딩 실패"
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        vm.onIntent(MirrorIntent.Convert)
-        assertEquals(ConversionState.Failed("디코딩 실패"), vm.state.value.conversion)
-    }
-
-    @Test
-    fun unsupportedFormatBlocksConvert() = runTest {
-        formats = setOf(AnimatedFormat.Gif)
-        val vm = viewModel()
-        vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4")))
-        vm.onIntent(MirrorIntent.ChangeConversionOptions(vm.state.value.conversionDraft!!.options.copy(format = AnimatedFormat.WebP)))
-        assertTrue(vm.state.value.conversionDraft!!.problems.isNotEmpty())
-        vm.onIntent(MirrorIntent.Convert)
-        assertNull(convertedWith)
-    }
-
-    @Test
-    fun sizeFormatting() {
-        assertEquals("4.4초", seconds(4_430))
-        assertEquals("0.5MB", megabytes(512 * 1024))
-        assertEquals("25MB", megabytes(25L * 1024 * 1024))
-    }
-
-    @Test
-    fun rotatedRecordingPartsAreConvertedTogether() = runTest {
+    fun openConversionAsksHostToShowIt() = runTest {
         val vm = viewModel()
         vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4", "/out/a_part2.mp4")))
-        val draft = vm.state.value.conversionDraft!!
-        assertEquals(8_000, draft.info.durationMs) // part 두 개 길이의 합
-        vm.onIntent(MirrorIntent.Convert)
-        assertEquals(listOf("/out/a.mp4", "/out/a_part2.mp4"), convertedFiles)
+        assertEquals(MirrorEffect.OpenConversion(listOf("/out/a.mp4", "/out/a_part2.mp4")), vm.effects.first())
     }
 }

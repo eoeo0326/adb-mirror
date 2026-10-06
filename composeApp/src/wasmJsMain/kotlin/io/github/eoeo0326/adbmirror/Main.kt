@@ -33,9 +33,11 @@ import io.github.eoeo0326.adbmirror.core.adb.web.requestAdbDevice
 import io.github.eoeo0326.adbmirror.core.adb.web.webUsbSupported
 import io.github.eoeo0326.adbmirror.core.data.web.fetchResource
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListEffect
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
+import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
 import kotlinx.browser.document
@@ -71,10 +73,18 @@ private fun UnsupportedBrowser() {
 /** 기기 하나의 미러링 화면. 화면을 떠날 때 세션을 정리한 뒤 ViewModel을 지운다. */
 private class MirrorHolder(val device: Device, graph: WebAppGraph) {
     private val store = ViewModelStore()
-    val viewModel: MirrorViewModel =
-        ViewModelProvider.create(store, viewModelFactory { initializer { graph.mirrorViewModel(device) } })[MirrorViewModel::class]
+    private val provider = ViewModelProvider.create(
+        store,
+        viewModelFactory {
+            initializer { graph.mirrorViewModel(device) }
+            initializer { graph.conversionViewModel() }
+        },
+    )
+    val viewModel: MirrorViewModel = provider[MirrorViewModel::class]
+    val conversion: ConversionViewModel = provider[ConversionViewModel::class]
 
     suspend fun close() {
+        conversion.shutdown()
         viewModel.shutdown()
         store.clear()
     }
@@ -106,7 +116,9 @@ private fun WebApp(graph: WebAppGraph) {
                 listViewModel.onIntent(DeviceListIntent.MirrorClosed(current.device.serial))
                 scope.launch { current.close() }
             }) { Text("← 기기 목록") }
-            MirrorRoute(current.viewModel, Modifier.fillMaxSize())
+            // 웹은 결과를 다운로드로 내보내므로 열기 버튼이 없다.
+            val conversion = remember(current) { ConversionHost.Overlay(current.conversion, opener = null) }
+            MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize())
         }
         return
     }

@@ -32,9 +32,11 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListEffect
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
+import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
 import kotlinx.coroutines.launch
@@ -51,10 +53,18 @@ class MainActivity : ComponentActivity() {
 /** 기기 하나의 미러링 화면. 화면을 떠날 때 세션을 정리한 뒤 ViewModel을 지운다. */
 private class MirrorHolder(val device: Device, graph: AndroidAppGraph) {
     private val store = ViewModelStore()
-    val viewModel: MirrorViewModel =
-        ViewModelProvider.create(store, viewModelFactory { initializer { graph.mirrorViewModel(device) } })[MirrorViewModel::class]
+    private val provider = ViewModelProvider.create(
+        store,
+        viewModelFactory {
+            initializer { graph.mirrorViewModel(device) }
+            initializer { graph.conversionViewModel() }
+        },
+    )
+    val viewModel: MirrorViewModel = provider[MirrorViewModel::class]
+    val conversion: ConversionViewModel = provider[ConversionViewModel::class]
 
     suspend fun close() {
+        conversion.shutdown()
         viewModel.shutdown()
         store.clear()
     }
@@ -96,7 +106,8 @@ private fun AndroidApp(graph: AndroidAppGraph) {
             listViewModel.onIntent(DeviceListIntent.MirrorClosed(current.device.serial))
             scope.launch { current.close() }
         }
-        MirrorRoute(current.viewModel, Modifier.fillMaxSize().safeDrawingPadding())
+        val conversion = remember(current) { ConversionHost.Overlay(current.conversion, opener = null) }
+        MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize().safeDrawingPadding())
     }
 }
 
