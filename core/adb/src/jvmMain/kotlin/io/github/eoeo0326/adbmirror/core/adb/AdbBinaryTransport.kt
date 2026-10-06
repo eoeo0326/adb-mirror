@@ -26,9 +26,17 @@ class AdbBinaryTransport(private val adb: File) : WirelessAdbTransport {
 
     override suspend fun devices(): List<AdbDevice> = AdbOutputParser.parseDevices(text(run(listOf("devices", "-l"))))
 
-    /** 전체 목록 스냅샷이라 소비가 늦으면 최신 목록만 남긴다(conflate). */
+    /**
+     * 전체 목록 스냅샷이라 소비가 늦으면 최신 목록만 남긴다(conflate).
+     * adb 서버가 꺼져 있으면 `start-server`로 먼저 띄운다. track 클라이언트가 서버를 띄우는 도중에 끊기면
+     * 서버도 뜨다 만다. stderr(`* daemon …` 안내)는 track 메시지와 섞이지 않게 따로 읽어 로그로만 남긴다.
+     */
     override fun trackDevices(): Flow<List<AdbDevice>> = callbackFlow {
-        val process = ProcessBuilder(adb.path, "track-devices", "-l").redirectErrorStream(true).start()
+        run(listOf("start-server"))
+        val process = ProcessBuilder(adb.path, "track-devices", "-l").start()
+        thread(name = "adb-track-devices-stderr", isDaemon = true) {
+            process.errorStream.bufferedReader().forEachLine { println("adb track-devices: $it") }
+        }
         thread(name = "adb-track-devices", isDaemon = true) {
             // 리더에서 난 예외도 Flow로 넘겨야 수집 쪽(retryWhen)이 다시 붙는다. 그냥 두면 Flow가 영원히 멈춘다.
             val cause = try {

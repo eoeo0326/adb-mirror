@@ -37,6 +37,15 @@ class AdbOutputParserTest {
     }
 
     @Test
+    fun daemonNoticeLinesAreSkipped() {
+        val body = "R3CM90LKDDJ\tdevice\n"
+        val msg = body.length.toString(16).padStart(4, '0') + body
+        val buffer = StringBuilder("* daemon not running; starting now at tcp:5037\n* daemon started successfully\n" + msg + "* dae")
+        assertEquals(listOf(body), AdbOutputParser.takeTrackMessages(buffer))
+        assertEquals("* dae", buffer.toString()) // 덜 온 안내 줄은 남긴다
+    }
+
+    @Test
     fun pairSucceedsOnlyWithSuccessLine() {
         assertNull(AdbOutputParser.pairFailure("Successfully paired to 192.168.0.9:37099 [guid=adb-R3CM90LKDDJ-ab12cd]"))
         assertEquals(
