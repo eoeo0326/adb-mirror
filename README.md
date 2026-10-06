@@ -103,7 +103,13 @@ python3 -m http.server -d composeApp/build/dist/wasmJs/productionExecutable 8080
 
 ### CI와 릴리즈
 
-[GitHub Actions](.github/workflows/build.yml)가 PR·main 푸시마다 테스트를 돌리고, macOS(arm64·x64)·Windows x64·Linux(x64·arm64)에서 설치 파일과 포터블을 만듭니다. `v*` 태그를 올리면 그 파일들과 `SHA256SUMS`를 GitHub Release에 올립니다(릴리즈가 없으면 CHANGELOG의 해당 버전 절로 만듭니다).
+[GitHub Actions](.github/workflows/build.yml)가 PR·main 푸시마다 테스트를 돌리고, macOS(arm64·x64)·Windows x64·Linux(x64·arm64)에서 설치 파일과 포터블을 만듭니다. `v*` 태그 빌드는 그 파일들과 `SHA256SUMS`를 GitHub Release에 올립니다(릴리즈가 없으면 CHANGELOG의 해당 버전 절로 만듭니다).
+
+개발은 `develop`에서 합니다. 기여할 때는 `develop`에서 브랜치를 따고 PR의 base도 `develop`으로 둡니다. 릴리즈는 아래 순서로 진행합니다.
+
+1. `scripts/release.sh X.Y.Z`(또는 Actions의 "Release 준비")가 `develop`에서 `release/vX.Y.Z`를 만들고, `appVersion`·CHANGELOG를 고친 뒤 `main`·`develop` 양쪽에 PR을 엽니다.
+2. 두 PR을 **merge commit**으로 머지합니다.
+3. `main` PR이 머지되면 [Release 태그](.github/workflows/release-tag.yml)가 `vX.Y.Z` 태그를 만들고 위 빌드로 GitHub Release를 올립니다. 웹앱도 이때 Pages에 다시 배포됩니다.
 
 macOS 서명·공증은 저장소 Secrets에 아래 값이 있을 때만 합니다. 없으면 ad-hoc 서명으로 만듭니다.
 
