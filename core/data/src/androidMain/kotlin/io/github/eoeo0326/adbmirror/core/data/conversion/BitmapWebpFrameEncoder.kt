@@ -6,7 +6,7 @@ import java.io.ByteArrayOutputStream
 
 /** Android 내장 WebP 인코더(Bitmap.compress)로 프레임 한 장을 손실 WebP(RIFF 전체)로 만든다. */
 object BitmapWebpFrameEncoder : WebpFrameEncoder {
-    override fun encode(frame: RgbaFrame, quality: Int): ByteArray {
+    override suspend fun encode(frame: RgbaFrame, quality: Int): ByteArray {
         val bitmap = Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
         try {
             bitmap.setPixels(frame.pixels, 0, frame.width, 0, 0, frame.width, frame.height)

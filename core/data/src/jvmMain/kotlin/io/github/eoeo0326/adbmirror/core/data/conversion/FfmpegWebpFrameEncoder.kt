@@ -12,7 +12,7 @@ import java.nio.ByteOrder
  * 프레임마다 인코더를 새로 열어 상태를 남기지 않는다.
  */
 class FfmpegWebpFrameEncoder private constructor(private val codec: AVCodec) : WebpFrameEncoder {
-    override fun encode(frame: RgbaFrame, quality: Int): ByteArray {
+    override suspend fun encode(frame: RgbaFrame, quality: Int): ByteArray {
         val ctx = avcodec.avcodec_alloc_context3(codec) ?: error("WebP 인코더를 만들지 못했습니다")
         val av = avutil.av_frame_alloc()
         val packet = avcodec.av_packet_alloc()
