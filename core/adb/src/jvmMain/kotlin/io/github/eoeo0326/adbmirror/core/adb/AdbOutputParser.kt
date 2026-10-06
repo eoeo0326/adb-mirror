@@ -14,10 +14,20 @@ internal object AdbOutputParser {
         }
         .toList()
 
-    /** track-devices 스트림에서 4자리 16진수 길이 + 본문 메시지를 하나씩 꺼낸다. 덜 온 메시지는 남긴다. */
+    /**
+     * track-devices 스트림에서 4자리 16진수 길이 + 본문 메시지를 하나씩 꺼낸다. 덜 온 메시지는 남긴다.
+     * adb가 서버를 띄우며 찍는 `* daemon …` 안내 줄이 섞여 오면 건너뛴다.
+     */
     fun takeTrackMessages(buffer: StringBuilder): List<String> {
         val messages = mutableListOf<String>()
-        while (buffer.length >= 4) {
+        while (true) {
+            if (buffer.isNotEmpty() && buffer[0] == '*') {
+                val end = buffer.indexOf("\n")
+                if (end < 0) break // 안내 줄이 덜 왔다
+                buffer.delete(0, end + 1)
+                continue
+            }
+            if (buffer.length < 4) break
             val length = buffer.substring(0, 4).toIntOrNull(16) ?: throw AdbException("track-devices 길이 해석 실패: ${buffer.take(4)}")
             if (buffer.length < 4 + length) break
             messages += buffer.substring(4, 4 + length)

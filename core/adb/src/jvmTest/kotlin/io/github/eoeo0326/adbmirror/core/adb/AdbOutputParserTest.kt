@@ -34,4 +34,13 @@ class AdbOutputParserTest {
         assertEquals(msg.take(6), buffer.toString())
         assertTrue(AdbOutputParser.parseDevices(messages[1]).isEmpty())
     }
+
+    @Test
+    fun daemonNoticeLinesAreSkipped() {
+        val body = "R3CM90LKDDJ\tdevice\n"
+        val msg = body.length.toString(16).padStart(4, '0') + body
+        val buffer = StringBuilder("* daemon not running; starting now at tcp:5037\n* daemon started successfully\n" + msg + "* dae")
+        assertEquals(listOf(body), AdbOutputParser.takeTrackMessages(buffer))
+        assertEquals("* dae", buffer.toString()) // 덜 온 안내 줄은 남긴다
+    }
 }

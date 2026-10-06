@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 수정
+- Desktop: 앱을 켤 때 adb 서버가 꺼져 있으면 기기 목록이 계속 비던 문제. 서버를 먼저 띄우고, 서버를 띄우며 찍는 안내 문구를 기기 목록으로 해석하지 않는다
+
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
 

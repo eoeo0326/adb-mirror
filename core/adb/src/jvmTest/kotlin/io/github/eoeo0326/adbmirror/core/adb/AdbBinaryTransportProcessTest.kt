@@ -19,7 +19,8 @@ class AdbBinaryTransportProcessTest {
     private fun fakeAdb(body: String): Pair<AdbBinaryTransport, File> {
         val dir = Files.createTempDirectory("fake-adb").toFile()
         val script = File(dir, "adb")
-        script.writeText("#!/bin/sh\n$body\n")
+        // 받은 명령을 calls 파일에 남기고, 진짜 adb처럼 start-server는 바로 끝난다(trackDevices가 먼저 부른다).
+        script.writeText("#!/bin/sh\necho \"\$1\" >> \"\$(dirname \"\$0\")/calls\"\n[ \"\$1\" = start-server ] && exit 0\n$body\n")
         script.setExecutable(true)
         return AdbBinaryTransport(script) to dir
     }
@@ -61,5 +62,15 @@ class AdbBinaryTransportProcessTest {
         val (transport, _) = fakeAdb("printf 'zzzz'; exec sleep 30")
         assertFailsWith<AdbException> { withTimeout(5_000) { transport.trackDevices().first() } }
         Unit
+    }
+
+    @Test
+    fun trackDevicesStartsServerFirstAndIgnoresStderr() = runBlocking {
+        if (!posix) return@runBlocking
+        // 서버를 띄우는 adb처럼 stderr에 안내를 찍어도 track 메시지만 해석한다.
+        val (transport, dir) = fakeAdb("echo '* daemon not running; starting now at tcp:5037' >&2; printf '0013R3CM90LKDDJ\\tdevice\\n'; exec sleep 30")
+        val list = withTimeout(5_000) { transport.trackDevices().first() }
+        assertEquals(listOf(AdbDevice("R3CM90LKDDJ", "device")), list)
+        assertEquals(listOf("start-server", "track-devices"), File(dir, "calls").readLines())
     }
 }
