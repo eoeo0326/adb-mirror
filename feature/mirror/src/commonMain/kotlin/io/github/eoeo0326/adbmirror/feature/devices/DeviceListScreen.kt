@@ -32,6 +32,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.model.isSelectable
+import io.github.eoeo0326.adbmirror.core.domain.model.isWireless
 
 @Composable
 fun DeviceListRoute(viewModel: DeviceListViewModel, modifier: Modifier = Modifier) {
@@ -45,8 +46,11 @@ fun DeviceListScreen(state: DeviceListState, onIntent: (DeviceListIntent) -> Uni
         Text("기기 선택", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
         if (state.devices.isEmpty()) {
             Text(
-                if (state.wireless != null) "연결된 기기가 없습니다.\n아래에서 무선 디버깅 기기를 페어링·연결하세요."
-                else "연결된 adb 기기가 없습니다.\n기기를 USB로 연결하고, 개발자 옵션에서 USB 디버깅을 켜 주세요.",
+                when {
+                    state.wireless == null -> "연결된 adb 기기가 없습니다.\n기기를 USB로 연결하고, 개발자 옵션에서 USB 디버깅을 켜 주세요."
+                    state.usb -> "연결된 기기가 없습니다.\n기기를 USB로 연결하고 USB 디버깅을 켜거나, 아래에서 무선 디버깅 기기를 페어링·연결하세요."
+                    else -> "연결된 기기가 없습니다.\n아래에서 무선 디버깅 기기를 페어링·연결하세요."
+                },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -58,7 +62,7 @@ fun DeviceListScreen(state: DeviceListState, onIntent: (DeviceListIntent) -> Uni
                     selected = device.serial == state.selectedSerial,
                     open = device.serial in state.openSerials,
                     onClick = { onIntent(DeviceListIntent.Select(device.serial)) },
-                    onDisconnect = if (state.wireless != null) ({ onIntent(DeviceListIntent.Disconnect(device.serial)) }) else null,
+                    onDisconnect = if (state.wireless != null && device.isWireless) ({ onIntent(DeviceListIntent.Disconnect(device.serial)) }) else null,
                 )
             }
             state.wireless?.let { form -> item(key = "wireless") { WirelessCard(form, onIntent) } }
@@ -110,11 +114,11 @@ private fun WirelessCard(form: WirelessForm, onIntent: (DeviceListIntent) -> Uni
     ) {
         Text("무선 기기 추가", fontWeight = FontWeight.Medium)
         Text(
-            "기기에서 설정 > 개발자 옵션 > 무선 디버깅을 켜세요. 처음 한 번은 \"페어링 코드로 기기 페어링\"의 값으로 페어링하고, 그다음부터는 무선 디버깅 화면의 IP 주소·포트로 연결합니다. " +
+            "기기에서 설정 > 개발자 옵션 > 무선 디버깅을 켜세요. 처음 한 번은 \"페어링 코드로 기기 페어링\"의 값으로 페어링하고, 그다음부터는 무선 디버깅 화면의 IP 주소·포트로 연결합니다." +
                 if (form.canPairByNotification) {
-                    "이 폰 자신은 \"알림으로 이 폰 페어링\"을 누른 뒤, 설정의 페어링 창에 나온 코드를 알림에 답장으로 입력하세요."
+                    " 이 폰 자신은 \"알림으로 이 폰 페어링\"을 누른 뒤, 설정의 페어링 창에 나온 코드를 알림에 답장으로 입력하세요."
                 } else {
-                    "이 폰 자신을 페어링할 때는 페어링 창이 닫히지 않도록 이 앱을 팝업 화면이나 화면 분할로 띄우세요."
+                    " 기기와 이 컴퓨터가 같은 Wi-Fi에 있어야 합니다."
                 },
             style = MaterialTheme.typography.bodySmall,
             color = colors.onSurfaceVariant,

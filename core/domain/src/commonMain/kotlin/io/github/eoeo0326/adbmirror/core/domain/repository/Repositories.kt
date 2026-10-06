@@ -5,6 +5,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.InstallResult
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.Recording
@@ -40,6 +41,12 @@ interface WirelessDeviceRepository {
 interface WirelessDiscoveryRepository {
     /** 지금 보이는 서비스 목록. 구독하는 동안 찾는다. */
     fun services(): Flow<List<WirelessService>>
+}
+
+/** 기기의 앱. */
+interface AppRepository {
+    /** [apkPath]의 APK를 [serial] 기기에 설치한다. 기기가 거절하면 [InstallResult.Failure]. */
+    suspend fun install(serial: String, apkPath: String): InstallResult
 }
 
 interface MirrorRepository {

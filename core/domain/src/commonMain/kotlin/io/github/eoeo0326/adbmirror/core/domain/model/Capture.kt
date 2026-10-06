@@ -83,5 +83,9 @@ data class ConversionOptions(
 sealed interface ConversionProgress {
     /** 0.0~1.0 */
     data class Running(val fraction: Float) : ConversionProgress
-    data class Done(val file: String) : ConversionProgress
+    /**
+     * [file]은 보여줄 저장 위치, [uri]는 다른 앱으로 열 때 쓰는 주소(Android의 content Uri).
+     * [uri]가 null이면 [file]이 그대로 열 수 있는 경로다(Desktop). 열 수 없는 플랫폼도 있다(Web 다운로드).
+     */
+    data class Done(val file: String, val uri: String? = null) : ConversionProgress
 }

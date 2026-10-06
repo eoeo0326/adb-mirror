@@ -47,24 +47,8 @@ object MirrorReducer {
 
         is MirrorResult.RecordingSaved -> state.copy(lastRecording = result.files)
 
-        is MirrorResult.ConversionOpened ->
-            if (state.conversion is ConversionState.Converting) state else state.copy(conversionDraft = result.draft, conversion = ConversionState.Idle)
-        // 변환하는 동안에는 옵션을 바꾸지 않는다(진행 중인 변환과 화면이 어긋나지 않게).
-        // 옵션을 바꾸면 지난 결과(저장 경로·실패 사유)는 지운다.
-        is MirrorResult.ConversionOptionsChanged ->
-            if (state.conversion is ConversionState.Converting) {
-                state
-            } else {
-                state.copy(conversionDraft = state.conversionDraft?.copy(options = result.options), conversion = ConversionState.Idle)
-            }
-        MirrorResult.ConversionClosed -> state.copy(conversionDraft = null, conversion = ConversionState.Idle)
-
-        is MirrorResult.ConversionProgressed ->
-            state.copy(conversion = ConversionState.Converting(result.fraction.coerceIn(0f, 1f)))
-
-        is MirrorResult.ConversionFinished -> state.copy(conversion = ConversionState.Done(result.file))
-        is MirrorResult.ConversionFailed -> state.copy(conversion = ConversionState.Failed(result.message))
-        MirrorResult.ConversionCancelled -> state.copy(conversion = ConversionState.Idle)
+        is MirrorResult.InstallStarted -> state.copy(installing = result.name)
+        MirrorResult.InstallFinished -> state.copy(installing = null)
 
         MirrorResult.ScreenshotStarted -> state.copy(capturingScreenshot = true)
         MirrorResult.ScreenshotFinished -> state.copy(capturingScreenshot = false)

@@ -1,9 +1,13 @@
 package io.github.eoeo0326.adbmirror.core.domain
 
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
+import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
+import io.github.eoeo0326.adbmirror.core.domain.model.isWireless
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
@@ -39,5 +43,13 @@ class ModelTest {
         assertEquals(base * 2, ConversionOptions(width = 480, fps = 20).estimatedBytes(info))
         assertEquals(base / 2, ConversionOptions(width = 480, fps = 10, endMs = 5_000).estimatedBytes(info))
         assertTrue(ConversionOptions(format = io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat.WebP, width = 480, fps = 10).estimatedBytes(info) < base)
+    }
+
+    @Test
+    fun wirelessDevicesAreRecognizedBySerial() {
+        assertTrue(Device("192.168.0.9:41234", DeviceState.Online).isWireless)
+        assertTrue(Device("adb-R3CM90LKDDJ-ab12cd._adb-tls-connect._tcp", DeviceState.Online).isWireless)
+        assertFalse(Device("R3CM90LKDDJ", DeviceState.Online).isWireless)
+        assertFalse(Device("emulator-5554", DeviceState.Online).isWireless)
     }
 }

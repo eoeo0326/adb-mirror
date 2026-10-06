@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.feature.mirror
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,18 +40,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionEffect
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionIntent
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionPanel
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
+import io.github.eoeo0326.adbmirror.feature.conversion.FileOpener
 import io.github.eoeo0326.adbmirror.feature.mirror.video.VideoSurface
 import io.github.eoeo0326.adbmirror.feature.mirror.video.touchEffect
 import kotlinx.coroutines.delay
 
 /** ViewModel에 연결된 미러링 창 내용. */
+/** 변환 화면을 어디에 띄울지. */
+sealed interface ConversionHost {
+    /** 미러링 화면 위에 덮어 띄운다(Android·Web). [opener]가 있으면 저장한 파일을 열 수 있다. */
+    class Overlay(val viewModel: ConversionViewModel, val opener: FileOpener?) : ConversionHost
+
+    /** 따로 띄운다(Desktop 창). 녹화 파일 목록을 넘긴다. */
+    class External(val open: (List<String>) -> Unit) : ConversionHost
+}
+
 @Composable
-fun MirrorRoute(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
+fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
     val session by viewModel.session.collectAsState()
     val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, conversion) {
         viewModel.effects.collect { effect ->
+            if (effect is MirrorEffect.OpenConversion) {
+                when (conversion) {
+                    is ConversionHost.Overlay -> conversion.viewModel.onIntent(ConversionIntent.Open(effect.files))
+                    is ConversionHost.External -> conversion.open(effect.files)
+                }
+                return@collect
+            }
             val message = effect.message() ?: return@collect
             // 녹화를 저장하면 바로 변환할 수 있게 한다.
             val action = if (effect is MirrorEffect.RecordingSaved) "변환…" else null
@@ -58,9 +81,25 @@ fun MirrorRoute(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
             }
         }
     }
+    val overlay = conversion as? ConversionHost.Overlay
+    if (overlay != null) {
+        LaunchedEffect(overlay.viewModel) {
+            overlay.viewModel.effects.collect { effect ->
+                val message = when (effect) {
+                    is ConversionEffect.ShowMessage -> effect.message
+                    is ConversionEffect.Done -> "변환을 마쳤습니다: ${effect.file}"
+                    ConversionEffect.Closed -> null
+                }
+                if (message != null) snackbar.showSnackbar(message, duration = SnackbarDuration.Short)
+            }
+        }
+    }
     Box(modifier) {
         MirrorScreen(state, session, viewModel::onIntent)
-        state.conversionDraft?.let { ConversionPanel(it, state.conversion, viewModel::onIntent) }
+        if (overlay != null) {
+            val conversionState by overlay.viewModel.state.collectAsState()
+            conversionState.draft?.let { ConversionPanel(it, conversionState.conversion, overlay.viewModel::onIntent, overlay.opener) }
+        }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp))
     }
 }
@@ -71,7 +110,7 @@ fun MirrorEffect.message(): String? = when (this) {
     is MirrorEffect.Error -> message
     is MirrorEffect.ScreenshotSaved -> "스크린샷을 저장했습니다: $path"
     is MirrorEffect.RecordingSaved -> "녹화를 저장했습니다: " + locations.first() + if (locations.size > 1) " 외 ${locations.size - 1}개(회전)" else ""
-    is MirrorEffect.ConversionDone -> "변환을 마쳤습니다: $file"
+    is MirrorEffect.OpenConversion -> null
     MirrorEffect.AskShowTouchesForRecording -> null
 }
 
@@ -82,6 +121,10 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(mirroring?.deviceName ?: state.device.model ?: state.device.serial, Modifier.weight(1f), fontWeight = FontWeight.Medium, maxLines = 1)
             RecordingBadge(state.recording)
+            RecordingStopButton(state.recording, onIntent)
+            state.installing?.let {
+                Text("설치 중… $it", style = MaterialTheme.typography.labelLarge, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp))
+            }
             if (session != null) {
                 Spacer(Modifier.width(12.dp))
                 OutlinedButton(onClick = { onIntent(MirrorIntent.Disconnect) }) { Text("연결 끊기") }
@@ -144,6 +187,8 @@ private fun OptionsMenu(state: MirrorState, onIntent: (MirrorIntent) -> Unit) {
     }
 }
 
+private val RecordingRed = Color(0xFFE5484D)
+
 /** 녹화 중이면 빨간 점과 경과 시간. 시작·마무리 중에는 그 상태를 글로 보인다. */
 @Composable
 private fun RecordingBadge(recording: RecordingState) {
@@ -163,7 +208,19 @@ private fun RecordingBadge(recording: RecordingState) {
             "● " + formatElapsed(elapsedMs)
         }
     }
-    Text(text, color = Color(0xFFE5484D), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp))
+    Text(text, color = RecordingRed, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp))
+}
+
+/** 녹화 중에 메뉴를 열지 않고 바로 멈추는 버튼. 시작·마무리 중에는 누를 수 없다. */
+@Composable
+private fun RecordingStopButton(recording: RecordingState, onIntent: (MirrorIntent) -> Unit) {
+    if (recording is RecordingState.Idle) return
+    OutlinedButton(
+        onClick = { onIntent(MirrorIntent.StopRecording) },
+        enabled = recording is RecordingState.Recording,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = RecordingRed),
+    ) { Text("■ 정지", style = MaterialTheme.typography.labelLarge) }
 }
 
 /** 경과 시간 m:ss (한 시간 넘으면 h:mm:ss). */
