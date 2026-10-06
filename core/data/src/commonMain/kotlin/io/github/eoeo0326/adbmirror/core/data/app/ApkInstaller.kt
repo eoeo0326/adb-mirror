@@ -59,7 +59,9 @@ internal sealed interface PmInstallOutput {
             if (lines.any { it == "Success" }) return Success
             if (lines.any { it.contains("Unknown option", ignoreCase = true) }) return UnknownOption
             FAILURE.find(output)?.let { return Failure(it.groupValues[1]) }
-            return Failure(lines.lastOrNull() ?: "설치 결과를 알 수 없습니다")
+            // 최근 Android는 실패를 스택트레이스로 찍는다: "java.lang.IllegalArgumentException: Error: Failed to parse APK file: …"
+            lines.firstNotNullOfOrNull { line -> line.substringAfter("Error: ", "").takeIf { it.isNotEmpty() } }?.let { return Failure(it) }
+            return Failure(lines.lastOrNull { !it.startsWith("at ") && !it.startsWith("...") } ?: "설치 결과를 알 수 없습니다")
         }
     }
 }

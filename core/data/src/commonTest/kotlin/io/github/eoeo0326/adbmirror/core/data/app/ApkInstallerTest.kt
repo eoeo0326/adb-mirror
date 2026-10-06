@@ -48,5 +48,15 @@ class ApkInstallerTest {
         assertEquals(PmInstallOutput.Failure("INSTALL_FAILED_INSUFFICIENT_STORAGE"), PmInstallOutput.parse("Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]"))
         assertEquals(PmInstallOutput.UnknownOption, PmInstallOutput.parse("Error: Unknown option: -t"))
         assertEquals(PmInstallOutput.Failure("설치 결과를 알 수 없습니다"), PmInstallOutput.parse(""))
+        // Android 12: 실패를 스택트레이스로 찍는다(실기기 출력)
+        assertEquals(
+            PmInstallOutput.Failure("Failed to parse APK file: /data/local/tmp/a.apk: Failed to parse /data/local/tmp/a.apk"),
+            PmInstallOutput.parse(
+                "\nException occurred while executing 'install':\n" +
+                    "java.lang.IllegalArgumentException: Error: Failed to parse APK file: /data/local/tmp/a.apk: Failed to parse /data/local/tmp/a.apk\n" +
+                    "\tat com.android.server.pm.PackageManagerShellCommand.setParamsSize(PackageManagerShellCommand.java:595)\n" +
+                    "\t... 12 more\n",
+            ),
+        )
     }
 }
