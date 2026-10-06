@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.feature.mirror
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -82,6 +84,7 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(mirroring?.deviceName ?: state.device.model ?: state.device.serial, Modifier.weight(1f), fontWeight = FontWeight.Medium, maxLines = 1)
             RecordingBadge(state.recording)
+            RecordingStopButton(state.recording, onIntent)
             if (session != null) {
                 Spacer(Modifier.width(12.dp))
                 OutlinedButton(onClick = { onIntent(MirrorIntent.Disconnect) }) { Text("연결 끊기") }
@@ -144,6 +147,8 @@ private fun OptionsMenu(state: MirrorState, onIntent: (MirrorIntent) -> Unit) {
     }
 }
 
+private val RecordingRed = Color(0xFFE5484D)
+
 /** 녹화 중이면 빨간 점과 경과 시간. 시작·마무리 중에는 그 상태를 글로 보인다. */
 @Composable
 private fun RecordingBadge(recording: RecordingState) {
@@ -163,7 +168,19 @@ private fun RecordingBadge(recording: RecordingState) {
             "● " + formatElapsed(elapsedMs)
         }
     }
-    Text(text, color = Color(0xFFE5484D), style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp))
+    Text(text, color = RecordingRed, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 8.dp))
+}
+
+/** 녹화 중에 메뉴를 열지 않고 바로 멈추는 버튼. 시작·마무리 중에는 누를 수 없다. */
+@Composable
+private fun RecordingStopButton(recording: RecordingState, onIntent: (MirrorIntent) -> Unit) {
+    if (recording is RecordingState.Idle) return
+    OutlinedButton(
+        onClick = { onIntent(MirrorIntent.StopRecording) },
+        enabled = recording is RecordingState.Recording,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = RecordingRed),
+    ) { Text("■ 정지", style = MaterialTheme.typography.labelLarge) }
 }
 
 /** 경과 시간 m:ss (한 시간 넘으면 h:mm:ss). */

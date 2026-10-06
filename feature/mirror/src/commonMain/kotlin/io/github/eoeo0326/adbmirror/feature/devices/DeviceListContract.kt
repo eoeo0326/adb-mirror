@@ -13,6 +13,8 @@ data class DeviceListState(
     val openSerials: Set<String> = emptySet(),
     /** 무선 디버깅 페어링·연결 입력. 지원하지 않는 플랫폼이면 null(화면에 나오지 않음). */
     val wireless: WirelessForm? = null,
+    /** USB로 붙은 기기도 목록에 나오는지(Android 앱은 무선만). 안내 문구에 쓴다. */
+    val usb: Boolean = true,
 ) {
     val selected: Device? get() = devices.firstOrNull { it.serial == selectedSerial }
     val canOpen: Boolean get() = selected?.isSelectable == true

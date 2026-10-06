@@ -14,6 +14,26 @@ internal object AdbOutputParser {
         }
         .toList()
 
+    /** `adb pair` 출력. 성공하면 `Successfully paired to …`를 찍는다(실패해도 exit 0인 adb 버전이 있다). */
+    fun pairFailure(output: String): String? =
+        if (output.lineSequence().any { it.trim().startsWith("Successfully paired") }) null
+        else failure("페어링하지 못했습니다", output)
+
+    /**
+     * `adb connect` 출력. 연결하지 못해도 exit 0으로 끝나는 경우가 많아 문구로 판정한다.
+     * 성공은 `connected to …` 또는 `already connected to …`.
+     */
+    fun connectFailure(output: String): String? {
+        val lines = output.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        val ok = lines.any { it.startsWith("connected to ") || it.startsWith("already connected to ") }
+        return if (ok) null else failure("연결하지 못했습니다", output)
+    }
+
+    private fun failure(title: String, output: String): String {
+        val detail = output.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+        return if (detail.isEmpty()) title else "$title: $detail"
+    }
+
     /**
      * track-devices 스트림에서 4자리 16진수 길이 + 본문 메시지를 하나씩 꺼낸다. 덜 온 메시지는 남긴다.
      * adb가 서버를 띄우며 찍는 `* daemon …` 안내 줄이 섞여 오면 건너뛴다.

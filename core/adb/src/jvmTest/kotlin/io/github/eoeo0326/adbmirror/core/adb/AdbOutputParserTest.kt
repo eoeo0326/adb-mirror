@@ -2,6 +2,7 @@ package io.github.eoeo0326.adbmirror.core.adb
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AdbOutputParserTest {
@@ -42,5 +43,33 @@ class AdbOutputParserTest {
         val buffer = StringBuilder("* daemon not running; starting now at tcp:5037\n* daemon started successfully\n" + msg + "* dae")
         assertEquals(listOf(body), AdbOutputParser.takeTrackMessages(buffer))
         assertEquals("* dae", buffer.toString()) // 덜 온 안내 줄은 남긴다
+    }
+
+    @Test
+    fun pairSucceedsOnlyWithSuccessLine() {
+        assertNull(AdbOutputParser.pairFailure("Successfully paired to 192.168.0.9:37099 [guid=adb-R3CM90LKDDJ-ab12cd]"))
+        assertEquals(
+            "페어링하지 못했습니다: Failed: Wrong password or connection was dropped.",
+            AdbOutputParser.pairFailure("Failed: Wrong password or connection was dropped.\n"),
+        )
+        assertEquals("페어링하지 못했습니다", AdbOutputParser.pairFailure(""))
+    }
+
+    @Test
+    fun connectFailureIsDetectedEvenWithExitZero() {
+        assertNull(AdbOutputParser.connectFailure("connected to 192.168.0.9:41234"))
+        assertNull(AdbOutputParser.connectFailure("already connected to 192.168.0.9:41234"))
+        assertEquals(
+            "연결하지 못했습니다: failed to connect to '192.168.0.9:41234': Connection refused",
+            AdbOutputParser.connectFailure("failed to connect to '192.168.0.9:41234': Connection refused"),
+        )
+        assertEquals(
+            "연결하지 못했습니다: failed to authenticate to 192.168.0.9:41234",
+            AdbOutputParser.connectFailure("failed to authenticate to 192.168.0.9:41234\n"),
+        )
+        assertEquals(
+            "연결하지 못했습니다: cannot connect to 192.168.0.9:1: Connection refused (61)",
+            AdbOutputParser.connectFailure("cannot connect to 192.168.0.9:1: Connection refused (61)"),
+        )
     }
 }
