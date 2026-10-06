@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 추가
+- 녹화 중 미러링 화면 상단바의 "■ 정지" 버튼으로 메뉴를 열지 않고 바로 녹화를 멈춤
+
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
 
