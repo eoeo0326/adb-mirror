@@ -93,15 +93,6 @@ class MirrorReducerTest {
     }
 
     @Test
-    fun conversionProgressIsClampedAndTerminates() {
-        val s = MirrorState(device)
-        assertEquals(ConversionState.Converting(1f), s.apply(MirrorResult.ConversionProgressed(1.4f)).conversion)
-        assertEquals(ConversionState.Converting(0f), s.apply(MirrorResult.ConversionProgressed(-1f)).conversion)
-        assertEquals(ConversionState.Done("a.gif"), s.apply(MirrorResult.ConversionFinished("a.gif")).conversion)
-        assertEquals(ConversionState.Idle, s.apply(MirrorResult.ConversionProgressed(0.5f), MirrorResult.ConversionCancelled).conversion)
-    }
-
-    @Test
     fun statusMessageShowsAndClears() {
         val shown = MirrorState(device).apply(MirrorResult.StatusShown("스크린샷 저장"))
         assertEquals("스크린샷 저장", shown.statusMessage)

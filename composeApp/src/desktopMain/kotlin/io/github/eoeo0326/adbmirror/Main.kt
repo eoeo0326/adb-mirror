@@ -31,10 +31,13 @@ import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.settings.PropertiesSettingsRepository
 import io.github.eoeo0326.adbmirror.core.data.settings.SettingsLocation
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionEffect
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionRoute
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListEffect
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
+import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.settings.SettingsPlatform
@@ -52,12 +55,19 @@ import java.util.concurrent.ConcurrentHashMap
 /** 열려 있는 미러링 창(serial → 창). */
 private val openWindows = mutableStateMapOf<String, MirrorWindowHolder>()
 
-/** 창은 닫혔지만 세션 정리가 끝나지 않은 것(serial → 정리 작업). 종료 훅이 이것도 기다린다. */
+/** 열려 있는 변환 창(첫 녹화 파일 → 창). 미러링 창과 따로 산다. */
+private val conversionWindows = mutableStateMapOf<String, ConversionWindowHolder>()
+
+/**
+ * 창은 닫혔지만 정리가 끝나지 않은 것(미러링: serial, 변환: `conversion:<파일>` → 정리 작업).
+ * 종료 훅이 이것도 기다린다.
+ */
 private val closingWindows = ConcurrentHashMap<String, Job>()
 
 private fun closeAllBlocking() = runBlocking {
     withTimeoutOrNull(3_000) {
         openWindows.values.toList().forEach { it.close() }
+        conversionWindows.values.toList().forEach { it.close() }
         closingWindows.values.toList().joinAll()
     }
 }
@@ -120,6 +130,14 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
     }
     DevAutoOpen(listViewModel)
 
+    // 같은 녹화의 변환 창이 이미 있으면 앞으로 가져온다.
+    val openConversion: (List<String>) -> Unit = { files ->
+        val id = files.first()
+        val existing = conversionWindows[id]
+        if (existing != null) existing.focusRequest.intValue++ else conversionWindows[id] = ConversionWindowHolder(files, graph)
+    }
+    val conversionHost = remember { ConversionHost.External(openConversion) }
+
     val quit = {
         closeAllBlocking()
         exitApplication()
@@ -158,16 +176,38 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
             }
             Window(onCloseRequest = closeWindow, state = holder.windowState, title = "ADB Mirror — ${holder.device.model ?: serial}") {
                 RememberWindowBounds(holder.windowState, windowBounds, "mirror.$serial", rememberSize = false)
-                MirrorMenuBar(holder, onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
+                MirrorMenuBar(holder, onCloseWindow = closeWindow, onOpenConversion = openConversion, onOpenSettings = openSettings, onQuit = quit)
                 FitWindowToVideo(holder)
                 AppTheme {
                     // 미러링 창에 APK를 끌어 놓으면 이 기기에 설치한다.
                     var dropping by remember { mutableStateOf(false) }
                     Box(Modifier.fillMaxSize().fileDropTarget(onHover = { dropping = it }, onDrop = { holder.viewModel.onIntent(MirrorIntent.InstallApks(it)) })) {
-                        MirrorRoute(holder.viewModel)
+                        MirrorRoute(holder.viewModel, conversionHost)
                         if (dropping) ApkDropOverlay(holder.device.model ?: serial)
                     }
                 }
+            }
+        }
+    }
+
+    for ((id, holder) in conversionWindows) {
+        key(id) {
+            val closeWindow = {
+                if (conversionWindows.remove(id) != null) {
+                    val closingKey = "conversion:$id"
+                    val job = scope.launch { holder.close() }
+                    closingWindows[closingKey] = job
+                    job.invokeOnCompletion { closingWindows.remove(closingKey, job) }
+                }
+            }
+            Window(onCloseRequest = closeWindow, title = "GIF·WebP 변환 — ${holder.title}", state = rememberWindowState(size = DpSize(460.dp, 760.dp))) {
+                val focus by holder.focusRequest
+                LaunchedEffect(focus) { if (focus > 0) window.toFront() }
+                LaunchedEffect(holder) {
+                    holder.viewModel.effects.collect { if (it is ConversionEffect.Closed) closeWindow() }
+                }
+                ConversionMenuBar(onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
+                AppTheme { ConversionRoute(holder.viewModel, DesktopFileOpener) }
             }
         }
     }
