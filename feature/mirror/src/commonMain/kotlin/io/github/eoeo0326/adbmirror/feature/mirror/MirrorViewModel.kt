@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.InstallResult
 import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
@@ -15,6 +16,7 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetConversionFormatsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.InstallApkUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
@@ -62,6 +64,8 @@ class MirrorViewModel(
     private val getVideoInfo: GetVideoInfoUseCase,
     private val getConversionFormats: GetConversionFormatsUseCase,
     private val convertRecording: ConvertRecordingUseCase,
+    /** APK 설치. 끌어 놓기를 지원하는 플랫폼(Desktop)만 넘긴다. */
+    private val installApk: InstallApkUseCase? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(MirrorState(device))
     val state: StateFlow<MirrorState> = _state.asStateFlow()
@@ -87,6 +91,9 @@ class MirrorViewModel(
     private val recordingLock = Mutex()
     private val clock = TimeSource.Monotonic.markNow()
     private var conversionJob: Job? = null
+
+    /** 놓은 APK를 하나씩 설치한다. 설치 중에 더 놓으면 뒤에 이어서 설치한다. */
+    private val installLock = Mutex()
     private var sessionSeq = 0
 
     init {
@@ -120,6 +127,7 @@ class MirrorViewModel(
                 cancelConversion()
                 reduce(MirrorResult.ConversionClosed)
             }
+            is MirrorIntent.InstallApks -> install(intent.paths)
         }
     }
 
@@ -290,6 +298,36 @@ class MirrorViewModel(
         if (job.isActive) {
             job.cancel()
             reduce(MirrorResult.ConversionCancelled)
+        }
+    }
+
+    private fun install(paths: List<String>) {
+        val installApk = installApk ?: return
+        val apks = paths.filter(InstallApkUseCase::isApk)
+        if (apks.isEmpty()) {
+            _effects.trySend(MirrorEffect.ShowMessage("APK 파일만 설치할 수 있습니다"))
+            return
+        }
+        val serial = _state.value.device.serial
+        viewModelScope.launch {
+            installLock.withLock {
+                for (path in apks) {
+                    val name = path.substringAfterLast('/').substringAfterLast('\\')
+                    reduce(MirrorResult.InstallStarted(name))
+                    val effect = try {
+                        when (val result = installApk(serial, path)) {
+                            InstallResult.Success -> MirrorEffect.ShowMessage("$name 설치를 마쳤습니다")
+                            is InstallResult.Failure -> MirrorEffect.Error("$name 설치에 실패했습니다: ${result.reason}")
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        MirrorEffect.Error("$name 설치에 실패했습니다: ${e.message ?: e::class.simpleName}")
+                    }
+                    _effects.trySend(effect)
+                }
+                reduce(MirrorResult.InstallFinished)
+            }
         }
     }
 

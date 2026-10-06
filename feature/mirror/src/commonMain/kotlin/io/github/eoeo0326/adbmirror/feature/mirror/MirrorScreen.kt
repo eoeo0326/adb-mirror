@@ -82,6 +82,9 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(mirroring?.deviceName ?: state.device.model ?: state.device.serial, Modifier.weight(1f), fontWeight = FontWeight.Medium, maxLines = 1)
             RecordingBadge(state.recording)
+            state.installing?.let {
+                Text("설치 중… $it", style = MaterialTheme.typography.labelLarge, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp))
+            }
             if (session != null) {
                 Spacer(Modifier.width(12.dp))
                 OutlinedButton(onClick = { onIntent(MirrorIntent.Disconnect) }) { Text("연결 끊기") }
