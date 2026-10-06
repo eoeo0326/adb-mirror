@@ -17,9 +17,9 @@ interface VideoFrameSource {
     suspend fun decode(file: String, startMs: Long, width: Int, height: Int, onFrame: suspend (ptsMs: Long, frame: RgbaFrame) -> Boolean)
 }
 
-/** 한 장짜리 WebP 인코더(Desktop FFmpeg libwebp 등). 결과는 RIFF 전체. */
-fun interface WebpFrameEncoder {
-    fun encode(frame: RgbaFrame, quality: Int): ByteArray
+/** 한 장짜리 WebP 인코더(Desktop FFmpeg libwebp, Web canvas 등). 결과는 RIFF 전체. 웹 인코더가 비동기라 suspend다. */
+interface WebpFrameEncoder {
+    suspend fun encode(frame: RgbaFrame, quality: Int): ByteArray
 }
 
 /** 녹화 파일 → 애니메이션 GIF/WebP 바이트. 인코딩은 이 모듈의 [GifEncoder]·[AnimatedWebpMuxer]가 한다. */
@@ -76,7 +76,7 @@ class AnimationConverter(private val source: VideoFrameSource, private val webp:
         return sink.finish()
     }
 
-    private class Sink(val add: (RgbaFrame, Int) -> Unit, val finish: () -> ByteArray)
+    private class Sink(val add: suspend (RgbaFrame, Int) -> Unit, val finish: () -> ByteArray)
 }
 
 /**
