@@ -106,7 +106,7 @@ private fun AndroidApp(graph: AndroidAppGraph) {
             listViewModel.onIntent(DeviceListIntent.MirrorClosed(current.device.serial))
             scope.launch { current.close() }
         }
-        val conversion = remember(current) { ConversionHost.Overlay(current.conversion, opener = null) }
+        val conversion = remember(current) { ConversionHost.Overlay(current.conversion, AndroidFileOpener(context)) }
         MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize().safeDrawingPadding())
     }
 }

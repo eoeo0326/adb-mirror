@@ -197,7 +197,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                     holder.viewModel.effects.collect { if (it is ConversionEffect.Closed) closeWindow() }
                 }
                 ConversionMenuBar(onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
-                AppTheme { ConversionRoute(holder.viewModel, opener = null) }
+                AppTheme { ConversionRoute(holder.viewModel, DesktopFileOpener) }
             }
         }
     }
