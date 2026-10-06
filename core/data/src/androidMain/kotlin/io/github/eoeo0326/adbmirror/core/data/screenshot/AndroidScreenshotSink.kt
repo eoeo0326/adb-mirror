@@ -33,7 +33,7 @@ class AndroidScreenshotSink(
     }
 
     override suspend fun save(png: ByteArray, dir: String?, baseName: String): String = withContext(Dispatchers.IO) {
-        media.publish(SharedMedia.Kind.Image, "image/png", "${baseName}_${now().format(STAMP)}.png") { it.write(png) }
+        media.publish(SharedMedia.Kind.Image, "image/png", "${baseName}_${now().format(STAMP)}.png") { it.write(png) }.location
     }
 
     companion object {

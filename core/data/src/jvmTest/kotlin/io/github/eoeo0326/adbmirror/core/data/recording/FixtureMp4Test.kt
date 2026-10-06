@@ -2,6 +2,7 @@ package io.github.eoeo0326.adbmirror.core.data.recording
 
 import io.github.eoeo0326.adbmirror.core.adb.ByteArraySource
 import io.github.eoeo0326.adbmirror.core.adb.EndOfStreamException
+import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegVideoFrameSource
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.VideoStreamParser
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
@@ -57,6 +58,11 @@ class FixtureMp4Test {
         assertEquals(frames, samples)
 
         File("build/fixture-mp4").mkdirs()
-        File("build/fixture-mp4/session1.mp4").writeBytes(bytes)
+        val file = File("build/fixture-mp4/session1.mp4").apply { writeBytes(bytes) }
+
+        // 웹 변환이 쓰는 Mp4Demuxer가 Desktop(FFmpeg)과 같은 샘플 수·크기·길이를 읽는지 본다.
+        val track = Mp4Demuxer.read(bytes.size.toLong()) { offset, length -> bytes.copyOfRange(offset.toInt(), offset.toInt() + length) }
+        assertEquals(frames, track.samples.size)
+        assertEquals(FfmpegVideoFrameSource().info(file.path), track.info)
     }
 }

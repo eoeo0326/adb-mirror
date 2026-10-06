@@ -33,6 +33,9 @@
 
 ### 커밋 · PR 규칙
 
+- **브랜치** — 기능·수정 브랜치는 `develop`에서 따고 PR도 `develop`으로 올린다(squash 머지). `main`에는 release PR만 들어간다.
+- **릴리즈** — `scripts/release.sh X.Y.Z`(또는 Actions "Release 준비")로 `release/vX.Y.Z`를 만들고, `main`·`develop` 양쪽 PR을 **merge commit**으로 머지한다. `main` PR이 머지되면 `release-tag.yml`이 태그를 만들고 릴리즈한다. 두 PR이 모두 머지되면 release 브랜치를 지운다.
+- **버전** — `appVersion`과 CHANGELOG 버전 절은 release 브랜치에서만 바꾼다. release PR이 아닌 PR에서 `appVersion`이 바뀌었으면 지적한다. 기능 PR은 CHANGELOG의 `[Unreleased]`에 항목을 추가한다.
 - 커밋 메시지는 한글 `type: Subject` 형식이다(`feat`·`fix`·`refactor`·`docs`·`chore`·`test`).
 - PR 제목은 `[#이슈번호] 제목`이다. 본문은 📌 링크 → 📝 요약 → 👤 사용자 영향 → 🛠️ 구현 → 👀 검토 요청 → ⏭️ 남은 것 → 접힘(📖 용어·배경 / 🧪 테스트 / ✅ QA) 순서로 쓴다.
 - PR 본문·커밋·코멘트에 AI 생성 표기(`Generated with ...`, 세션 URL, `Co-Authored-By` 트레일러)를 넣지 않는다.

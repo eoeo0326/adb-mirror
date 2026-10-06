@@ -41,8 +41,8 @@ interface CaptureOutput {
     /** 변환 중 임시 파일을 둘 폴더. */
     fun conversionTempDir(source: File): File
 
-    /** 다 쓴 변환 결과 [tmp]를 `<source 이름>.<ext>`로 내보내고 보여줄 위치를 돌려준다. [tmp]는 옮기거나 지운다. */
-    suspend fun publishAnimation(tmp: File, source: File, ext: String): String
+    /** 다 쓴 변환 결과 [tmp]를 `<source 이름>.<ext>`로 내보내고 보여줄 위치(와 열 주소)를 돌려준다. [tmp]는 옮기거나 지운다. */
+    suspend fun publishAnimation(tmp: File, source: File, ext: String): ConversionProgress.Done
 }
 
 /**
@@ -115,7 +115,7 @@ class FileRecordingRepository(
         try {
             val bytes = converter.convert(files, options) { emit(ConversionProgress.Running(it)) }
             tmp.writeBytes(bytes)
-            emit(ConversionProgress.Done(output.publishAnimation(tmp, source, ext)))
+            emit(output.publishAnimation(tmp, source, ext))
         } finally {
             tmp.delete()
         }

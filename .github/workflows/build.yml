@@ -2,6 +2,7 @@ name: Build
 
 # PR·main 푸시: 테스트와 OS별 설치 파일·포터블 빌드.
 # v* 태그: 위에 더해 GitHub Release에 배포 파일과 SHA256SUMS를 올린다.
+# 태그는 보통 release-tag.yml이 만들고, 그 태그를 ref로 이 workflow를 workflow_dispatch로 실행한다.
 on:
   pull_request:
   push:
