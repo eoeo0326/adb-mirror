@@ -6,6 +6,8 @@
 
 ## [0.7.0] - 2026-10-06
 
+사용 편의 개선 릴리즈입니다. Desktop에서 무선 디버깅으로 기기를 연결하고, 미러링 창에 APK를 끌어 놓아 설치할 수 있습니다. GIF·WebP 변환은 새 창에서 하고 결과를 바로 열 수 있으며, Web에서도 변환할 수 있습니다. 이 릴리즈부터 develop·release 브랜치로 배포합니다.
+
 ### 추가
 - 녹화 중 미러링 화면 상단바의 "■ 정지" 버튼으로 메뉴를 열지 않고 바로 녹화를 멈춤
 - Desktop: 무선 디버깅 기기를 IP·페어링 포트·코드로 페어링하고 IP·연결 포트로 연결. 연결했던 기기는 다음 실행 때 자동으로 다시 연결
@@ -21,6 +23,13 @@
 
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
+
+### 알려진 제한
+- Web: 쓰기 전에 이 컴퓨터의 adb 서버를 꺼야 합니다(`adb kill-server`). 변환은 가장 최근 녹화만 할 수 있습니다(다음 녹화를 시작하면 지워짐)
+- APK 끌어 놓기 설치는 Desktop만, 분할 APK(.apks·.xapk)는 아직 지원하지 않습니다
+- Android 앱 설치 파일(APK)은 아직 릴리즈에 없습니다(`./gradlew :androidApp:installDebug`)
+- macOS 앱은 Apple 개발자 서명·공증 전이라 처음 열 때 README의 "macOS에서 처음 열기"를 따라야 합니다
+- 1.0 전까지 macOS 패키지 내부 버전은 첫 숫자를 1로 씁니다(이 릴리즈는 1.7.0)
 
 ## [0.6.0] - 2026-10-01
 
