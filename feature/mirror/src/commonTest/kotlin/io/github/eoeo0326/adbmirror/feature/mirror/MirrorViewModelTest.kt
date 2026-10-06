@@ -1,5 +1,10 @@
 package io.github.eoeo0326.adbmirror.feature.mirror
 
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.take
+import io.github.eoeo0326.adbmirror.core.domain.usecase.InstallApkUseCase
+import io.github.eoeo0326.adbmirror.core.domain.model.InstallResult
+import io.github.eoeo0326.adbmirror.core.domain.repository.AppRepository
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
@@ -149,6 +154,16 @@ class MirrorViewModelTest {
         override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = emptyFlow()
     }
 
+    private val installed = mutableListOf<Pair<String, String>>()
+    private var installGate: CompletableDeferred<Unit>? = null
+    private val appRepo = object : AppRepository {
+        override suspend fun install(serial: String, apkPath: String): InstallResult {
+            installGate?.await()
+            installed += serial to apkPath
+            return if ("old" in apkPath) InstallResult.Failure("INSTALL_FAILED_VERSION_DOWNGRADE") else InstallResult.Success
+        }
+    }
+
     private fun viewModel() = MirrorViewModel(
         device = device,
         getSettings = GetSettingsUseCase(settingsRepo),
@@ -162,6 +177,7 @@ class MirrorViewModelTest {
         saveScreenshot = SaveScreenshotUseCase(screenshotRepo, settingsRepo),
         startRecording = StartRecordingUseCase(recordingRepo, settingsRepo),
         stopRecording = StopRecordingUseCase(recordingRepo),
+        installApk = InstallApkUseCase(appRepo),
     )
 
     @BeforeTest fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -510,5 +526,31 @@ class MirrorViewModelTest {
         val vm = viewModel()
         vm.onIntent(MirrorIntent.OpenConversion(listOf("/out/a.mp4", "/out/a_part2.mp4")))
         assertEquals(MirrorEffect.OpenConversion(listOf("/out/a.mp4", "/out/a_part2.mp4")), vm.effects.first())
+    }
+
+    @Test
+    fun droppedApksAreInstalledInOrderAndReported() = runTest {
+        val gate = CompletableDeferred<Unit>().also { installGate = it }
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.InstallApks(listOf("/a/app.apk", "/a/notes.txt", "/a/old.APK")))
+        assertEquals("app.apk", vm.state.value.installing)
+        gate.complete(Unit)
+        assertEquals(listOf(device.serial to "/a/app.apk", device.serial to "/a/old.APK"), installed)
+        assertNull(vm.state.value.installing)
+        assertEquals(
+            listOf(
+                MirrorEffect.ShowMessage("app.apk 설치를 마쳤습니다"),
+                MirrorEffect.Error("old.APK 설치에 실패했습니다: INSTALL_FAILED_VERSION_DOWNGRADE"),
+            ),
+            vm.effects.take(2).toList(),
+        )
+    }
+
+    @Test
+    fun droppingOnlyNonApkFilesShowsMessage() = runTest {
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.InstallApks(listOf("/a/notes.txt")))
+        assertEquals(MirrorEffect.ShowMessage("APK 파일만 설치할 수 있습니다"), vm.effects.first())
+        assertTrue(installed.isEmpty())
     }
 }

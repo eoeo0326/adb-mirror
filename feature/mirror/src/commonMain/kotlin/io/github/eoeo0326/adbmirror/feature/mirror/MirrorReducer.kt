@@ -47,6 +47,9 @@ object MirrorReducer {
 
         is MirrorResult.RecordingSaved -> state.copy(lastRecording = result.files)
 
+        is MirrorResult.InstallStarted -> state.copy(installing = result.name)
+        MirrorResult.InstallFinished -> state.copy(installing = null)
+
         MirrorResult.ScreenshotStarted -> state.copy(capturingScreenshot = true)
         MirrorResult.ScreenshotFinished -> state.copy(capturingScreenshot = false)
 

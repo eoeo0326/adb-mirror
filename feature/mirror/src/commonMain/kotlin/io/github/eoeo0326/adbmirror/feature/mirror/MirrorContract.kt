@@ -21,6 +21,8 @@ data class MirrorState(
     val sessionId: Int = 0,
     /** 스크린샷을 받는 중. 연달아 눌러도 한 장씩만 받는다. */
     val capturingScreenshot: Boolean = false,
+    /** 설치 중인 APK 파일 이름. 여러 개를 놓으면 차례로 바뀐다. */
+    val installing: String? = null,
 ) {
     /** 처음이거나, 끊긴 뒤 다시 연결할 수 있는 상태 */
     val canConnect: Boolean
@@ -56,6 +58,8 @@ sealed interface MirrorIntent {
     data object StopRecording : MirrorIntent
     /** 녹화 파일로 변환 화면을 연다. 회전으로 나뉜 녹화면 part를 모두 넘겨 이어서 변환한다. */
     data class OpenConversion(val files: List<String>) : MirrorIntent
+    /** 끌어 놓은 파일을 기기에 설치한다. APK가 아닌 파일은 건너뛴다. */
+    data class InstallApks(val paths: List<String>) : MirrorIntent
 }
 
 /**
@@ -80,6 +84,8 @@ sealed interface MirrorResult {
     data class RecordingStopping(override val sessionId: Int) : MirrorResult, SessionScoped
     data class RecordingStopped(override val sessionId: Int) : MirrorResult, SessionScoped
     data class RecordingSaved(val files: List<String>) : MirrorResult
+    data class InstallStarted(val name: String) : MirrorResult
+    data object InstallFinished : MirrorResult
     data object ScreenshotStarted : MirrorResult
     data object ScreenshotFinished : MirrorResult
     data class StatusShown(val message: String) : MirrorResult

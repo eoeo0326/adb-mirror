@@ -1,7 +1,9 @@
 package io.github.eoeo0326.adbmirror
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -36,6 +38,7 @@ import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
+import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.settings.SettingsPlatform
 import io.github.eoeo0326.adbmirror.feature.settings.SettingsRoute
@@ -175,7 +178,14 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                 RememberWindowBounds(holder.windowState, windowBounds, "mirror.$serial", rememberSize = false)
                 MirrorMenuBar(holder, onCloseWindow = closeWindow, onOpenConversion = openConversion, onOpenSettings = openSettings, onQuit = quit)
                 FitWindowToVideo(holder)
-                AppTheme { MirrorRoute(holder.viewModel, conversionHost) }
+                AppTheme {
+                    // 미러링 창에 APK를 끌어 놓으면 이 기기에 설치한다.
+                    var dropping by remember { mutableStateOf(false) }
+                    Box(Modifier.fillMaxSize().fileDropTarget(onHover = { dropping = it }, onDrop = { holder.viewModel.onIntent(MirrorIntent.InstallApks(it)) })) {
+                        MirrorRoute(holder.viewModel, conversionHost)
+                        if (dropping) ApkDropOverlay(holder.device.model ?: serial)
+                    }
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 package io.github.eoeo0326.adbmirror
 
 import io.github.eoeo0326.adbmirror.core.adb.AdbBinaryTransport
+import io.github.eoeo0326.adbmirror.core.data.app.ApkInstaller
 import io.github.eoeo0326.adbmirror.core.data.device.DeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.device.WirelessDeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
@@ -23,6 +24,7 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetKnownWirelessDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.InstallApkUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.PairDeviceUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
@@ -40,11 +42,13 @@ import io.github.eoeo0326.adbmirror.feature.settings.SettingsViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 
 /** 수동 DI. 화면·UseCase가 더 늘면 Koin으로 옮긴다. */
 class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepository, dataDir: java.io.File) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val devices = DeviceRepositoryImpl(transport)
+    private val apps = ApkInstaller(transport) { path -> withContext(Dispatchers.IO) { java.io.File(path).readBytes() } }
     private val wireless = WirelessDeviceRepositoryImpl(transport, FileTextStore(java.io.File(dataDir, "known-devices.txt")))
     private val screenshots = ScreenshotRepositoryImpl(transport, DesktopScreenshotSink())
     private val recordings = FileRecordingRepository(scope)
@@ -76,6 +80,7 @@ class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepo
         saveScreenshot = SaveScreenshotUseCase(screenshots, settings),
         startRecording = StartRecordingUseCase(recordings, settings),
         stopRecording = StopRecordingUseCase(recordings),
+        installApk = InstallApkUseCase(apps),
     )
 
     fun conversionViewModel() = ConversionViewModel(
