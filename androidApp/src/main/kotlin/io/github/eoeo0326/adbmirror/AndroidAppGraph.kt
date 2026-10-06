@@ -84,6 +84,7 @@ class AndroidAppGraph(context: Context, privateDir: File) {
             DiscoverWirelessServicesUseCase(discovery),
             notificationPairing = true,
         ),
+        usb = false,
     )
 
     fun mirrorViewModel(device: Device) = MirrorViewModel(

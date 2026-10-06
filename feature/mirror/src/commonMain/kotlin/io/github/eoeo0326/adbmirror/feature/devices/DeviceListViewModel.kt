@@ -38,8 +38,11 @@ class WirelessActions(
 class DeviceListViewModel(
     getDevices: GetDevicesUseCase,
     private val wireless: WirelessActions? = null,
+    usb: Boolean = true,
 ) : ViewModel() {
-    private val _state = MutableStateFlow(DeviceListState(wireless = wireless?.let { WirelessForm(canPairByNotification = it.notificationPairing) }))
+    private val _state = MutableStateFlow(
+        DeviceListState(wireless = wireless?.let { WirelessForm(canPairByNotification = it.notificationPairing) }, usb = usb),
+    )
     val state: StateFlow<DeviceListState> = _state.asStateFlow()
 
     private val _effects = Channel<DeviceListEffect>(Channel.BUFFERED)

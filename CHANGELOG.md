@@ -5,10 +5,15 @@
 ## [Unreleased]
 
 ### 추가
+- 녹화 중 미러링 화면 상단바의 "■ 정지" 버튼으로 메뉴를 열지 않고 바로 녹화를 멈춤
+- Desktop: 무선 디버깅 기기를 IP·페어링 포트·코드로 페어링하고 IP·연결 포트로 연결. 연결했던 기기는 다음 실행 때 자동으로 다시 연결
 - 변환을 마치면 "파일 열기"(Desktop·Android)·"폴더 열기"(Desktop) 버튼으로 결과를 바로 연다
 
 ### 변경
 - Desktop: GIF·WebP 변환을 미러링 창 위가 아니라 새 창에서 한다. 변환하는 동안에도 미러링을 계속 쓸 수 있고, 미러링 창을 닫아도 변환은 이어진다
+
+### 수정
+- Desktop: 앱을 켤 때 adb 서버가 꺼져 있으면 기기 목록이 계속 비던 문제. 서버를 먼저 띄우고, 서버를 띄우며 찍는 안내 문구를 기기 목록으로 해석하지 않는다
 
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
