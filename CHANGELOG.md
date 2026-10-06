@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-06
+
 ### 추가
 - 녹화 중 미러링 화면 상단바의 "■ 정지" 버튼으로 메뉴를 열지 않고 바로 녹화를 멈춤
 - Desktop: 무선 디버깅 기기를 IP·페어링 포트·코드로 페어링하고 IP·연결 포트로 연결. 연결했던 기기는 다음 실행 때 자동으로 다시 연결
@@ -126,7 +128,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.3.0...v0.4.0
