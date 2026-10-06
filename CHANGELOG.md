@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 추가
+- Desktop: 무선 디버깅 기기를 IP·페어링 포트·코드로 페어링하고 IP·연결 포트로 연결. 연결했던 기기는 다음 실행 때 자동으로 다시 연결
+
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
 
