@@ -4,6 +4,7 @@ import io.github.eoeo0326.adbmirror.core.data.conversion.AnimationConverter
 import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegVideoFrameSource
 import io.github.eoeo0326.adbmirror.core.data.conversion.FfmpegWebpFrameEncoder
 import io.github.eoeo0326.adbmirror.core.data.screenshot.defaultOutputDir
+import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import java.nio.file.Files
@@ -17,13 +18,13 @@ class FolderCaptureOutput(private val defaultDir: () -> File) : CaptureOutput {
 
     override fun conversionTempDir(source: File): File = source.parentFile
 
-    override suspend fun publishAnimation(tmp: File, source: File, ext: String): String {
+    override suspend fun publishAnimation(tmp: File, source: File, ext: String): ConversionProgress.Done {
         val base = source.nameWithoutExtension
         val target = generateSequence(1) { it + 1 }
             .map { n -> File(source.parentFile, if (n == 1) "$base.$ext" else "${base}_$n.$ext") }
             .first { !it.exists() }
         Files.move(tmp.toPath(), target.toPath())
-        return target.absolutePath
+        return ConversionProgress.Done(target.absolutePath)
     }
 }
 

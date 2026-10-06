@@ -1,4 +1,4 @@
-package io.github.eoeo0326.adbmirror.feature.mirror
+package io.github.eoeo0326.adbmirror.feature.conversion
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -21,6 +21,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,13 +32,45 @@ import io.github.eoeo0326.adbmirror.core.domain.model.AnimatedFormat
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import kotlin.math.roundToLong
 
-/** 녹화 파일 → GIF·WebP 변환 화면. 미러링 창 위를 덮는다. */
+/**
+ * 별도 창(Desktop)에 띄우는 변환 화면. 파일을 읽는 동안·읽지 못했을 때도 창 안에 보여 준다.
+ * [ConversionEffect.Closed]로 창을 닫는 것은 띄운 쪽이 맡는다.
+ */
+@Composable
+fun ConversionRoute(viewModel: ConversionViewModel, opener: FileOpener?, modifier: Modifier = Modifier) {
+    val state by viewModel.state.collectAsState()
+    val draft = state.draft
+    if (draft != null) {
+        ConversionPanel(draft, state.conversion, viewModel::onIntent, opener, modifier)
+        return
+    }
+    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("GIF·WebP로 변환", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            val error = state.loadError
+            if (error != null) {
+                Text(error, color = ErrorRed, style = MaterialTheme.typography.bodyMedium)
+                OutlinedButton(onClick = { viewModel.onIntent(ConversionIntent.Close) }) { Text("닫기") }
+            } else {
+                Text("녹화 파일을 읽는 중…", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+/** 녹화 파일 → GIF·WebP 변환 화면. [opener]가 있으면 저장한 뒤 파일·폴더 열기 버튼을 보인다. */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ConversionPanel(draft: ConversionDraft, conversion: ConversionState, onIntent: (MirrorIntent) -> Unit, modifier: Modifier = Modifier) {
+fun ConversionPanel(
+    draft: ConversionDraft,
+    conversion: ConversionState,
+    onIntent: (ConversionIntent) -> Unit,
+    opener: FileOpener?,
+    modifier: Modifier = Modifier,
+) {
     val o = draft.options
     val busy = conversion is ConversionState.Converting
-    fun change(transform: (ConversionOptions) -> ConversionOptions) = onIntent(MirrorIntent.ChangeConversionOptions(transform(o)))
+    fun change(transform: (ConversionOptions) -> ConversionOptions) = onIntent(ConversionIntent.ChangeOptions(transform(o)))
 
     Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
         Column(
@@ -125,7 +159,7 @@ fun ConversionPanel(draft: ConversionDraft, conversion: ConversionState, onInten
             Text(
                 "예상 크기 약 ${megabytes(draft.estimatedBytes)}" + if (draft.isLarge) " — 메신저·이슈 첨부 한도를 넘을 수 있습니다. fps·너비·구간을 줄여 보세요." else "",
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (draft.isLarge) Color(0xFFE5484D) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (draft.isLarge) ErrorRed else MaterialTheme.colorScheme.onSurfaceVariant,
             )
             draft.problems.forEach { Note(it) }
 
@@ -134,24 +168,40 @@ fun ConversionPanel(draft: ConversionDraft, conversion: ConversionState, onInten
                     LinearProgressIndicator(progress = { conversion.fraction }, modifier = Modifier.fillMaxWidth())
                     Text("변환 중 ${(conversion.fraction * 100).toInt()}%", style = MaterialTheme.typography.bodySmall)
                 }
-                is ConversionState.Done -> Text("저장했습니다: ${conversion.file}", style = MaterialTheme.typography.bodyMedium)
-                is ConversionState.Failed -> Text("변환하지 못했습니다: ${conversion.message}", color = Color(0xFFE5484D), style = MaterialTheme.typography.bodyMedium)
+                is ConversionState.Done -> {
+                    Text("저장했습니다: ${conversion.file}", style = MaterialTheme.typography.bodyMedium)
+                    if (opener != null) OpenButtons(conversion, opener)
+                }
+                is ConversionState.Failed -> Text("변환하지 못했습니다: ${conversion.message}", color = ErrorRed, style = MaterialTheme.typography.bodyMedium)
                 ConversionState.Idle -> Unit
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (busy) {
-                    OutlinedButton(onClick = { onIntent(MirrorIntent.CancelConversion) }) { Text("취소") }
+                    OutlinedButton(onClick = { onIntent(ConversionIntent.Cancel) }) { Text("취소") }
                 } else {
-                    Button(onClick = { onIntent(MirrorIntent.Convert) }, enabled = draft.problems.isEmpty()) {
+                    Button(onClick = { onIntent(ConversionIntent.Convert) }, enabled = draft.problems.isEmpty()) {
                         Text(if (conversion is ConversionState.Done) "다시 변환" else "변환")
                     }
-                    OutlinedButton(onClick = { onIntent(MirrorIntent.CloseConversion) }) { Text("닫기") }
+                    OutlinedButton(onClick = { onIntent(ConversionIntent.Close) }) { Text("닫기") }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun OpenButtons(done: ConversionState.Done, opener: FileOpener) {
+    val canOpen = opener.canOpen(done.file, done.uri)
+    val canReveal = opener.canReveal(done.file)
+    if (!canOpen && !canReveal) return
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (canOpen) OutlinedButton(onClick = { opener.open(done.file, done.uri) }) { Text("파일 열기") }
+        if (canReveal) OutlinedButton(onClick = { opener.reveal(done.file) }) { Text("폴더 열기") }
+    }
+}
+
+private val ErrorRed = Color(0xFFE5484D)
 
 private val WIDTHS = listOf(240, 320, 480, 720, 1080)
 

@@ -2,6 +2,7 @@ package io.github.eoeo0326.adbmirror.core.data.recording
 
 import android.content.Context
 import io.github.eoeo0326.adbmirror.core.data.media.SharedMedia
+import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,14 +23,15 @@ class MediaStoreCaptureOutput(
     }
 
     override suspend fun recordingSaved(files: List<File>): List<String> = withContext(Dispatchers.IO) {
-        files.map { file -> media.publish(SharedMedia.Kind.Video, "video/mp4", file.name) { out -> file.inputStream().use { it.copyTo(out) } } }
+        files.map { file -> media.publish(SharedMedia.Kind.Video, "video/mp4", file.name) { out -> file.inputStream().use { it.copyTo(out) } }.location }
     }
 
     override fun conversionTempDir(source: File): File = context.cacheDir
 
-    override suspend fun publishAnimation(tmp: File, source: File, ext: String): String = withContext(Dispatchers.IO) {
+    override suspend fun publishAnimation(tmp: File, source: File, ext: String): ConversionProgress.Done = withContext(Dispatchers.IO) {
         try {
-            media.publish(SharedMedia.Kind.Image, "image/$ext", "${source.nameWithoutExtension}.$ext") { out -> tmp.inputStream().use { it.copyTo(out) } }
+            val published = media.publish(SharedMedia.Kind.Image, "image/$ext", "${source.nameWithoutExtension}.$ext") { out -> tmp.inputStream().use { it.copyTo(out) } }
+            ConversionProgress.Done(published.location, published.uri)
         } finally {
             tmp.delete()
         }

@@ -32,6 +32,7 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.StartRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopMirroringUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StopRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.WirelessActions
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
@@ -75,8 +76,11 @@ class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepo
         saveScreenshot = SaveScreenshotUseCase(screenshots, settings),
         startRecording = StartRecordingUseCase(recordings, settings),
         stopRecording = StopRecordingUseCase(recordings),
-        getVideoInfo = GetVideoInfoUseCase(recordings),
-        getConversionFormats = GetConversionFormatsUseCase(recordings),
-        convertRecording = ConvertRecordingUseCase(recordings),
+    )
+
+    fun conversionViewModel() = ConversionViewModel(
+        GetVideoInfoUseCase(recordings),
+        GetConversionFormatsUseCase(recordings),
+        ConvertRecordingUseCase(recordings),
     )
 }

@@ -40,18 +40,39 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionEffect
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionIntent
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionPanel
+import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
+import io.github.eoeo0326.adbmirror.feature.conversion.FileOpener
 import io.github.eoeo0326.adbmirror.feature.mirror.video.VideoSurface
 import io.github.eoeo0326.adbmirror.feature.mirror.video.touchEffect
 import kotlinx.coroutines.delay
 
 /** ViewModel에 연결된 미러링 창 내용. */
+/** 변환 화면을 어디에 띄울지. */
+sealed interface ConversionHost {
+    /** 미러링 화면 위에 덮어 띄운다(Android·Web). [opener]가 있으면 저장한 파일을 열 수 있다. */
+    class Overlay(val viewModel: ConversionViewModel, val opener: FileOpener?) : ConversionHost
+
+    /** 따로 띄운다(Desktop 창). 녹화 파일 목록을 넘긴다. */
+    class External(val open: (List<String>) -> Unit) : ConversionHost
+}
+
 @Composable
-fun MirrorRoute(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
+fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
     val session by viewModel.session.collectAsState()
     val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(viewModel) {
+    LaunchedEffect(viewModel, conversion) {
         viewModel.effects.collect { effect ->
+            if (effect is MirrorEffect.OpenConversion) {
+                when (conversion) {
+                    is ConversionHost.Overlay -> conversion.viewModel.onIntent(ConversionIntent.Open(effect.files))
+                    is ConversionHost.External -> conversion.open(effect.files)
+                }
+                return@collect
+            }
             val message = effect.message() ?: return@collect
             // 녹화를 저장하면 바로 변환할 수 있게 한다.
             val action = if (effect is MirrorEffect.RecordingSaved) "변환…" else null
@@ -60,9 +81,25 @@ fun MirrorRoute(viewModel: MirrorViewModel, modifier: Modifier = Modifier) {
             }
         }
     }
+    val overlay = conversion as? ConversionHost.Overlay
+    if (overlay != null) {
+        LaunchedEffect(overlay.viewModel) {
+            overlay.viewModel.effects.collect { effect ->
+                val message = when (effect) {
+                    is ConversionEffect.ShowMessage -> effect.message
+                    is ConversionEffect.Done -> "변환을 마쳤습니다: ${effect.file}"
+                    ConversionEffect.Closed -> null
+                }
+                if (message != null) snackbar.showSnackbar(message, duration = SnackbarDuration.Short)
+            }
+        }
+    }
     Box(modifier) {
         MirrorScreen(state, session, viewModel::onIntent)
-        state.conversionDraft?.let { ConversionPanel(it, state.conversion, viewModel::onIntent) }
+        if (overlay != null) {
+            val conversionState by overlay.viewModel.state.collectAsState()
+            conversionState.draft?.let { ConversionPanel(it, conversionState.conversion, overlay.viewModel::onIntent, overlay.opener) }
+        }
         SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(12.dp))
     }
 }
@@ -73,7 +110,7 @@ fun MirrorEffect.message(): String? = when (this) {
     is MirrorEffect.Error -> message
     is MirrorEffect.ScreenshotSaved -> "스크린샷을 저장했습니다: $path"
     is MirrorEffect.RecordingSaved -> "녹화를 저장했습니다: " + locations.first() + if (locations.size > 1) " 외 ${locations.size - 1}개(회전)" else ""
-    is MirrorEffect.ConversionDone -> "변환을 마쳤습니다: $file"
+    is MirrorEffect.OpenConversion -> null
     MirrorEffect.AskShowTouchesForRecording -> null
 }
 

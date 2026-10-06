@@ -8,7 +8,6 @@ import androidx.compose.ui.input.key.KeyShortcut
 import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 import io.github.eoeo0326.adbmirror.feature.mirror.Connection
-import io.github.eoeo0326.adbmirror.feature.mirror.ConversionState
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
 import io.github.eoeo0326.adbmirror.feature.mirror.RecordingState
 
@@ -22,7 +21,13 @@ internal fun shortcut(key: Key) = KeyShortcut(key, meta = isMac, ctrl = !isMac)
  * macOS의 종료(⌘Q)는 앱 메뉴가 맡으므로 파일 메뉴에는 Windows·Linux에서만 둔다.
  */
 @Composable
-fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: () -> Unit, onOpenSettings: () -> Unit, onQuit: () -> Unit) {
+fun FrameWindowScope.MirrorMenuBar(
+    holder: MirrorWindowHolder,
+    onCloseWindow: () -> Unit,
+    onOpenConversion: (List<String>) -> Unit,
+    onOpenSettings: () -> Unit,
+    onQuit: () -> Unit,
+) {
     val state by holder.viewModel.state.collectAsState()
     val session by holder.viewModel.session.collectAsState()
     val send = holder.viewModel::onIntent
@@ -36,8 +41,8 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
             } else {
                 Item("녹화 정지", shortcut = shortcut(Key.R), enabled = rec is RecordingState.Recording) { send(MirrorIntent.StopRecording) }
             }
-            Item("녹화 파일 변환…", enabled = state.conversion !is ConversionState.Converting) {
-                pickFile("변환할 녹화 파일(MP4) 선택")?.let { send(MirrorIntent.OpenConversion(recordingParts(it))) }
+            Item("녹화 파일 변환…") {
+                pickFile("변환할 녹화 파일(MP4) 선택")?.let { onOpenConversion(recordingParts(it)) }
             }
             Separator()
             Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)
@@ -55,6 +60,21 @@ fun FrameWindowScope.MirrorMenuBar(holder: MirrorWindowHolder, onCloseWindow: ()
         Menu("기기") {
             Item("연결 끊기", enabled = session != null) { send(MirrorIntent.Disconnect) }
             Item("다시 연결", enabled = state.canConnect) { send(MirrorIntent.Connect) }
+        }
+    }
+}
+
+/** 변환 창 메뉴 막대. 창 닫기(⌘W)를 다른 창과 맞춘다. */
+@Composable
+fun FrameWindowScope.ConversionMenuBar(onCloseWindow: () -> Unit, onOpenSettings: () -> Unit, onQuit: () -> Unit) {
+    MenuBar {
+        Menu("파일") {
+            Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)
+            if (!isMac) {
+                Separator()
+                Item("설정…", shortcut = shortcut(Key.Comma), onClick = onOpenSettings)
+                Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
+            }
         }
     }
 }
