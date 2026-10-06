@@ -20,3 +20,6 @@ enum class DeviceState {
 }
 
 val Device.isSelectable: Boolean get() = state == DeviceState.Online
+
+/** 무선 디버깅으로 붙은 기기. serial이 `host:port`이거나 mDNS 이름(`adb-…._adb-tls-connect._tcp`)이다. */
+val Device.isWireless: Boolean get() = ':' in serial || "._adb-tls-connect." in serial

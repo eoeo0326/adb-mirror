@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -20,8 +21,8 @@ import java.net.Socket
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-/** adb 실행 파일을 `ProcessBuilder`로 호출하는 Desktop 전송. */
-class AdbBinaryTransport(private val adb: File) : AdbTransport {
+/** adb 실행 파일을 `ProcessBuilder`로 호출하는 Desktop 전송. 무선 디버깅은 `adb pair`·`adb connect`로 붙는다. */
+class AdbBinaryTransport(private val adb: File) : WirelessAdbTransport {
 
     override suspend fun devices(): List<AdbDevice> = AdbOutputParser.parseDevices(text(run(listOf("devices", "-l"))))
 
@@ -113,11 +114,46 @@ class AdbBinaryTransport(private val adb: File) : AdbTransport {
         )
     }
 
-    /**
-     * adb 명령을 끝까지 실행한다. 실패하면 stderr(없으면 stdout)를 담아 [AdbException].
-     * 취소되면 프로세스를 강제 종료한다. 그래야 파이프를 읽던 쪽도 EOF로 풀려 코루틴이 끝난다.
-     */
-    private suspend fun run(args: List<String>): ByteArray = coroutineScope {
+    override suspend fun pair(host: String, port: Int, code: String) {
+        val result = exec(listOf("pair", address(host, port), code))
+        AdbOutputParser.pairFailure(result.text)?.let { throw AdbException(it) }
+    }
+
+    override suspend fun connect(host: String, port: Int): AdbDevice {
+        val serial = address(host, port)
+        val result = exec(listOf("connect", serial))
+        AdbOutputParser.connectFailure(result.text)?.let { throw AdbException(it) }
+        // adb 서버가 기기 정보(model)를 채우기까지 잠깐 걸린다.
+        repeat(10) {
+            devices().firstOrNull { it.serial == serial && it.model != null }?.let { return it }
+            delay(200)
+        }
+        return devices().firstOrNull { it.serial == serial } ?: AdbDevice(serial, "device", null)
+    }
+
+    override suspend fun disconnect(serial: String) {
+        run(listOf("disconnect", serial))
+    }
+
+    /** IPv6 주소는 `[::1]:5555`처럼 대괄호로 감싼다. */
+    private fun address(host: String, port: Int) = if (':' in host && !host.startsWith("[")) "[$host]:$port" else "$host:$port"
+
+    /** adb 명령을 끝까지 실행한다. 실패하면 stderr(없으면 stdout)를 담아 [AdbException]. */
+    private suspend fun run(args: List<String>): ByteArray {
+        val result = exec(args)
+        if (result.code != 0) {
+            val message = text(result.stderr.takeIf { it.isNotEmpty() } ?: result.stdout).trim()
+            throw AdbException("adb ${args.joinToString(" ")} 실패 (exit ${result.code}): $message")
+        }
+        return result.stdout
+    }
+
+    private class ExecResult(val code: Int, val stdout: ByteArray, val stderr: ByteArray) {
+        val text: String get() = (stdout.decodeToString() + "\n" + stderr.decodeToString()).trim()
+    }
+
+    /** 취소되면 프로세스를 강제 종료한다. 그래야 파이프를 읽던 쪽도 EOF로 풀려 코루틴이 끝난다. */
+    private suspend fun exec(args: List<String>): ExecResult = coroutineScope {
         val process = withContext(Dispatchers.IO) { ProcessBuilder(listOf(adb.path) + args).start() }
         val stdout = async(Dispatchers.IO) { process.inputStream.readBytes() }
         val stderr = async(Dispatchers.IO) { process.errorStream.readBytes() }
@@ -127,12 +163,7 @@ class AdbBinaryTransport(private val adb: File) : AdbTransport {
             process.destroyForcibly()
             throw e
         }
-        val out = stdout.await()
-        if (code != 0) {
-            val message = text(stderr.await().takeIf { it.isNotEmpty() } ?: out).trim()
-            throw AdbException("adb ${args.joinToString(" ")} 실패 (exit $code): $message")
-        }
-        out
+        ExecResult(code, stdout.await(), stderr.await())
     }
 
     private fun text(bytes: ByteArray) = bytes.decodeToString()
