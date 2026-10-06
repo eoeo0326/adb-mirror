@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 추가
+- Desktop: 미러링 창에 APK 파일을 끌어 놓으면 그 기기에 설치한다. 여러 개면 차례로 설치하고, 실패하면 기기가 알려 준 사유를 보인다
+
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
 
