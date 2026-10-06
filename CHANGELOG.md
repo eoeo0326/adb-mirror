@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+### 추가
+- Web: 가장 최근 녹화를 GIF·WebP로 변환해 내려받는다. 브라우저의 WebCodecs로 녹화를 디코딩하고, 인코딩은 Desktop·Android와 같은 공통 엔진을 쓴다
+
 ### 제거
 - macOS Swift 프로토타입(`macos-swift/`)과 `scripts/fetch-server.sh`. KMP 앱이 같은 기능을 모두 갖췄다. scrcpy-server는 Gradle `fetchScrcpyServer`가 받는다
 

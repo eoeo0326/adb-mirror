@@ -2,6 +2,7 @@
 
 package io.github.eoeo0326.adbmirror.core.data.web
 
+import io.github.eoeo0326.adbmirror.core.data.conversion.AnimationConverter
 import io.github.eoeo0326.adbmirror.core.data.recording.Recorder
 import io.github.eoeo0326.adbmirror.core.data.recording.RecordingPart
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotSink
@@ -27,14 +28,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlin.js.Promise
-
-@JsFun("(n) => new Uint8Array(n)")
-private external fun newBytes(length: Int): JsAny
-
-@JsFun("(a, i, v) => { a[i] = v; }")
-private external fun setByteAt(array: JsAny, index: Int, value: Int)
-
-private fun ByteArray.toUint8Array(): JsAny = newBytes(size).also { a -> forEachIndexed { i, b -> setByteAt(a, i, b.toInt() and 0xFF) } }
 
 /** 지금 시각 `yyyyMMdd_HHmmss`(브라우저 시간대). */
 @JsFun(
@@ -83,15 +76,38 @@ private external fun closeWritable(writable: JsAny): Promise<JsAny?>
 @JsFun("async (dir, name) => (await dir.getFileHandle(name)).getFile()")
 private external fun fileOf(dir: JsAny, name: String): Promise<JsAny>
 
-/** 앞선 녹화 파일을 지운다(다운로드로 내보낸 뒤라 남겨 둘 이유가 없다). */
+@JsFun("async (dir, name) => new Uint8Array(await (await (await dir.getFileHandle(name)).getFile()).arrayBuffer())")
+private external fun fileBytes(dir: JsAny, name: String): Promise<JsAny>
+
+/** 앞선 녹화 파일을 지운다(다운로드로 내보냈고, 변환은 가장 최근 녹화만 한다). */
 @JsFun("async (dir) => { const names = []; for await (const [name] of dir.entries()) names.push(name); for (const n of names) { try { await dir.removeEntry(n); } catch (e) {} } }")
 private external fun clearDir(dir: JsAny): Promise<JsAny?>
 
 /**
  * 웹 녹화: 공통 [Recorder]가 만든 fragmented MP4 조각을 OPFS(사이트 전용 파일 공간)에 비동기로 쓰고,
- * 끝나면 브라우저 다운로드로 내보낸다. 메모리에 녹화 전체를 쥐지 않는다. GIF·WebP 변환은 지원하지 않는다.
+ * 끝나면 브라우저 다운로드로 내보낸다. 메모리에 녹화 전체를 쥐지 않는다.
+ * OPFS의 녹화는 다음 녹화를 시작할 때까지 남아, 가장 최근 녹화를 GIF·WebP로 변환할 수 있다(결과도 다운로드).
  */
 class WebRecordingRepository(private val scope: CoroutineScope) : RecordingRepository {
+    private val converter = AnimationConverter(
+        WebVideoFrameSource { name -> fileBytes(recordingsDir().await<JsAny>(), name).await<JsAny>() },
+        CanvasWebpFrameEncoder,
+    )
+
+    /** 변환할 수 있는 형식. WebP는 브라우저가 canvas로 인코딩하는지 확인한 뒤에 더한다. */
+    private var formats: Set<AnimatedFormat> = if (webDecodingAvailable()) setOf(AnimatedFormat.Gif) else emptySet()
+
+    /** 변환 중인 수. 변환하는 동안에는 새 녹화가 OPFS를 비우지 않는다. */
+    private var converting = 0
+
+    init {
+        if (formats.isNotEmpty()) {
+            scope.launch {
+                if (webpEncodingSupported().await<JsBoolean>().toBoolean()) formats = formats + AnimatedFormat.WebP
+            }
+        }
+    }
+
     /** 조각 하나. 쓰기는 큐에 넣고 [writer]가 OPFS에 차례로 쓴다. 쓰다 실패하면(용량 초과 등) [failure]에 남기고 더 받지 않는다. */
     private class OpfsPart(override val path: String, dir: JsAny, scope: CoroutineScope) : RecordingPart {
         private val queue = Channel<ByteArray>(Channel.UNLIMITED)
@@ -132,7 +148,7 @@ class WebRecordingRepository(private val scope: CoroutineScope) : RecordingRepos
     override suspend fun start(session: MirrorSession, outputDir: String?) = lock.withLock {
         check(session.serial !in active) { "이미 녹화 중입니다" }
         val dir = recordingsDir().await<JsAny>()
-        if (active.isEmpty()) clearDir(dir).await<JsAny?>()
+        if (active.isEmpty() && converting == 0) clearDir(dir).await<JsAny?>()
         val base = "adb-mirror_" + session.serial.replace(Regex("[^A-Za-z0-9._-]"), "_") + "_" + timestamp()
         val parts = mutableListOf<OpfsPart>()
         val recorder = Recorder { index ->
@@ -163,10 +179,21 @@ class WebRecordingRepository(private val scope: CoroutineScope) : RecordingRepos
         Recording(serial, result.files, result.durationMs, result.files.map { "다운로드/$it" })
     }
 
-    override suspend fun info(file: String): VideoInfo = throw UnsupportedOperationException("웹에서는 녹화 파일을 다시 읽지 않습니다")
+    override suspend fun info(file: String): VideoInfo = converter.info(file)
 
-    override fun supportedFormats(): Set<AnimatedFormat> = emptySet()
+    override fun supportedFormats(): Set<AnimatedFormat> = formats.intersect(converter.supportedFormats)
 
-    override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> =
-        flow { throw UnsupportedOperationException("웹에서는 GIF·WebP 변환을 지원하지 않습니다") }
+    /** [files]는 OPFS의 녹화 이름이다. 결과는 `<첫 녹화 이름>.gif|webp`로 내려받는다. */
+    override fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress> = flow {
+        converting++
+        try {
+            val bytes = converter.convert(files, options) { emit(ConversionProgress.Running(it)) }
+            val (ext, mime) = if (options.format == AnimatedFormat.Gif) "gif" to "image/gif" else "webp" to "image/webp"
+            val name = files.first().removeSuffix(".mp4") + ".$ext"
+            downloadBlob(blobOf(bytes.toUint8Array(), mime), name)
+            emit(ConversionProgress.Done("다운로드/$name"))
+        } finally {
+            converting--
+        }
+    }
 }
