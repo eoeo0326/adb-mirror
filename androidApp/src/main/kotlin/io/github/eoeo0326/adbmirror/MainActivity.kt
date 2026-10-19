@@ -38,6 +38,7 @@ import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListEffect
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
+import io.github.eoeo0326.adbmirror.feature.devices.WirelessAddRoute
 import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
@@ -76,6 +77,7 @@ private class MirrorHolder(val device: Device, graph: AndroidAppGraph) {
 private fun AndroidApp(graph: AndroidAppGraph) {
     val listViewModel = remember { graph.deviceListViewModel() }
     var mirror by remember { mutableStateOf<MirrorHolder?>(null) }
+    var addingWireless by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -88,6 +90,8 @@ private fun AndroidApp(graph: AndroidAppGraph) {
                     mirror?.let { old -> scope.launch { old.close() } }
                     mirror = MirrorHolder(effect.device, graph)
                 }
+                DeviceListEffect.OpenWirelessAdd -> addingWireless = true
+                DeviceListEffect.WirelessConnected -> addingWireless = false
                 DeviceListEffect.StartNotificationPairing ->
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -100,7 +104,10 @@ private fun AndroidApp(graph: AndroidAppGraph) {
         }
     }
     val current = mirror
-    if (current == null) {
+    if (current == null && addingWireless) {
+        BackHandler { addingWireless = false }
+        WirelessAddRoute(listViewModel, onBack = { addingWireless = false }, Modifier.fillMaxSize().safeDrawingPadding())
+    } else if (current == null) {
         DeviceListRoute(listViewModel, Modifier.fillMaxSize().safeDrawingPadding())
     } else {
         BackHandler {
