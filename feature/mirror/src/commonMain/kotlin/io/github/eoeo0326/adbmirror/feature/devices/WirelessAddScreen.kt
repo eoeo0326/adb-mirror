@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -17,10 +20,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldLabelPosition
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -128,17 +135,33 @@ private fun Help(vararg sentences: String) {
     Text(sentences.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-/** IP 주소 칸. 끝자리만 입력하면 [WirelessInput.DEFAULT_SUBNET] 대역으로 본다(바꾸는 일은 UseCase가 한다). */
+/**
+ * IP 주소 칸. 끝자리만 입력하면 [WirelessInput.DEFAULT_SUBNET] 대역으로 본다(바꾸는 일은 UseCase가 한다).
+ * 비어 있을 때도 예시 주소가 보이도록 라벨을 늘 칸 위에 둔다(이 옵션은 TextFieldState 입력란에만 있다).
+ */
 @Composable
 private fun HostField(form: WirelessForm, onChange: (String) -> Unit) {
-    Field(
-        label = "IP 주소",
-        value = form.host,
-        type = KeyboardType.Uri,
+    val text = rememberTextFieldState(form.host)
+    val latestOnChange by rememberUpdatedState(onChange)
+    val latestHost by rememberUpdatedState(form.host)
+    // 찾은 서비스로 채우는 등 바깥에서 바뀐 주소를 입력란에 반영한다.
+    LaunchedEffect(form.host) {
+        if (text.text.toString().trim() != form.host) text.setTextAndPlaceCursorAtEnd(form.host)
+    }
+    LaunchedEffect(text) {
+        // 같은 값을 다시 보내면 지난 결과 문구(예: 페어링 성공)가 지워지므로 바뀔 때만 보낸다.
+        snapshotFlow { text.text.toString().trim() }.collect { if (it != latestHost) latestOnChange(it) }
+    }
+    OutlinedTextField(
+        state = text,
+        label = { Text("IP 주소") },
+        labelPosition = TextFieldLabelPosition.Attached(alwaysMinimize = true),
+        placeholder = { Text("${WirelessInput.DEFAULT_SUBNET}XX") },
+        supportingText = { Text("끝자리만 입력하면 ${WirelessInput.DEFAULT_SUBNET}{숫자}로 연결합니다.\n다른 대역이면 IP 주소 전체를 입력하세요.") },
+        lineLimits = TextFieldLineLimits.SingleLine,
         enabled = !form.busy,
-        placeholder = "${WirelessInput.DEFAULT_SUBNET}XX",
-        supporting = "끝자리만 입력하면 ${WirelessInput.DEFAULT_SUBNET}{숫자}로 연결합니다.\n다른 대역이면 IP 주소 전체를 입력하세요.",
-        onChange = onChange,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -156,22 +179,11 @@ private fun FoundServices(form: WirelessForm, kind: WirelessService.Kind, onInte
 }
 
 @Composable
-private fun Field(
-    label: String,
-    value: String,
-    type: KeyboardType,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    placeholder: String? = null,
-    supporting: String? = null,
-    onChange: (String) -> Unit,
-) {
+private fun Field(label: String, value: String, type: KeyboardType, enabled: Boolean, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = { onChange(it.trim()) },
         label = { Text(label) },
-        placeholder = placeholder?.let { { Text(it) } },
-        supportingText = supporting?.let { { Text(it) } },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = type),
