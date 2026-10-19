@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.feature.devices
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.model.isSelectable
+import io.github.eoeo0326.adbmirror.core.domain.usecase.WirelessInput
 
 /** 기기 목록 화면(창). 기기가 하나여도 자동으로 고르거나 열지 않는다. */
 data class DeviceListState(
@@ -47,7 +48,7 @@ data class WirelessForm(
      */
     fun autofilled(): WirelessForm {
         if (busy || pairPort.isNotBlank()) return this
-        val pairing = found.filter { it.kind == WirelessService.Kind.Pairing && (host.isBlank() || it.host == host) }.singleOrNull()
+        val pairing = found.filter { it.kind == WirelessService.Kind.Pairing && (host.isBlank() || it.host == WirelessInput.resolveHost(host)) }.singleOrNull()
         return pairing?.let { copy(host = it.host, pairPort = it.port.toString()) } ?: this
     }
 }

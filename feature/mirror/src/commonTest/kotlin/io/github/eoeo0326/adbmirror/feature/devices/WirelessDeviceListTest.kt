@@ -166,6 +166,25 @@ class WirelessDeviceListTest {
     }
 
     @Test
+    fun lastOctetOnlyConnectsToDefaultSubnet() = runTest {
+        val vm = vm()
+        vm.onIntent(DeviceListIntent.EditWireless(WirelessForm(host = "12", connectPort = "43025")))
+        vm.onIntent(DeviceListIntent.ConnectWireless)
+        assertEquals(listOf("connect 192.168.0.12:43025"), calls)
+        assertEquals(listOf("192.168.0.12:43025"), vm.state.value.devices.map { it.serial })
+    }
+
+    @Test
+    fun lastOctetMatchesFoundPairingService() = runTest {
+        val vm = vm(withDiscovery = true)
+        vm.onIntent(DeviceListIntent.EditWireless(WirelessForm(host = "12")))
+        services.value = listOf(pairing("192.168.0.12", 41234), pairing("192.168.0.13", 41235))
+        val form = vm.state.value.wireless!!
+        assertEquals("192.168.0.12", form.host)
+        assertEquals("41234", form.pairPort)
+    }
+
+    @Test
     fun severalPairingCandidatesAreNotAutofilled() = runTest {
         val vm = vm(withDiscovery = true)
         services.value = listOf(pairing("10.0.0.7", 40000), pairing("192.168.0.12", 41234))
