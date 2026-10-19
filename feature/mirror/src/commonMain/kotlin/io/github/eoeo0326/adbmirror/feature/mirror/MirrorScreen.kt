@@ -63,9 +63,18 @@ sealed interface ConversionHost {
     class External(val open: (List<String>) -> Unit) : ConversionHost
 }
 
-/** [keyboardInput]면 키보드로 친 글자·붙여넣기를 기기로 보낸다(하드웨어 키보드가 있는 Desktop). */
+/**
+ * [keyboardInput]면 키보드로 친 글자·붙여넣기를 기기로 보낸다(하드웨어 키보드가 있을 때).
+ * [showSoftKeyboard]가 false면 입력을 받는 동안에도 화면 키보드를 띄우지 않는다.
+ */
 @Composable
-fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier: Modifier = Modifier, keyboardInput: Boolean = false) {
+fun MirrorRoute(
+    viewModel: MirrorViewModel,
+    conversion: ConversionHost,
+    modifier: Modifier = Modifier,
+    keyboardInput: Boolean = false,
+    showSoftKeyboard: Boolean = true,
+) {
     val state by viewModel.state.collectAsState()
     val session by viewModel.session.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -100,7 +109,7 @@ fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier
         }
     }
     Box(modifier) {
-        MirrorScreen(state, session, viewModel::onIntent, keyboardInput = keyboardInput)
+        MirrorScreen(state, session, viewModel::onIntent, keyboardInput = keyboardInput, showSoftKeyboard = showSoftKeyboard)
         if (overlay != null) {
             val conversionState by overlay.viewModel.state.collectAsState()
             conversionState.draft?.let { ConversionPanel(it, conversionState.conversion, overlay.viewModel::onIntent, overlay.opener) }
@@ -126,6 +135,7 @@ fun MirrorScreen(
     onIntent: (MirrorIntent) -> Unit,
     modifier: Modifier = Modifier,
     keyboardInput: Boolean = false,
+    showSoftKeyboard: Boolean = true,
 ) {
     val mirroring = state.connection as? Connection.Mirroring
     val typing = keyboardInput && session != null && mirroring != null && !state.settings.viewOnly
@@ -172,7 +182,7 @@ fun MirrorScreen(
                 is Connection.Error -> Disconnected("연결이 끊겼습니다: ${c.message}", onIntent)
                 Connection.Idle -> Disconnected("연결을 끊었습니다", onIntent)
             }
-            if (typing) KeyboardInput(keyboardFocus, onIntent, Modifier.align(Alignment.BottomStart).padding(12.dp))
+            if (typing) KeyboardInput(keyboardFocus, onIntent, Modifier.align(Alignment.BottomStart).padding(12.dp), showSoftKeyboard)
         }
     }
 }
