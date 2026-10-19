@@ -12,6 +12,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
@@ -122,6 +123,9 @@ class WebConversionTest {
         override val packets: Flow<EncodedPacket> = flow
         override val events: Flow<SessionEvent> = emptyFlow()
         override suspend fun sendTouch(event: TouchEvent) {}
+        override suspend fun pressKey(key: DeviceKey) {}
+        override suspend fun injectText(text: String) {}
+        override suspend fun pasteText(text: String) {}
         override suspend fun requestKeyFrame() {}
         override suspend fun stop() {}
     }

@@ -14,6 +14,15 @@ interface MirrorSession {
     /** control=false로 연 세션이면 아무것도 하지 않는다. 보기 전용 판단은 `SendTouchUseCase`가 한다. */
     suspend fun sendTouch(event: TouchEvent)
 
+    /** 키를 한 번 눌렀다 뗀다. */
+    suspend fun pressKey(key: DeviceKey)
+
+    /** 기기 키맵으로 칠 수 있는 글자를 친다. 키맵에 없는 글자(한글 등)는 서버가 버린다. */
+    suspend fun injectText(text: String)
+
+    /** 기기 클립보드에 넣고 붙여넣기 키를 누른다. 기기 클립보드를 덮어쓴다. */
+    suspend fun pasteText(text: String)
+
     /** key frame을 즉시 요청한다(녹화 시작 시). */
     suspend fun requestKeyFrame()
 

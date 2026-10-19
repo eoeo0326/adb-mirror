@@ -19,6 +19,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 import io.github.eoeo0326.adbmirror.core.domain.repository.DeviceRepository
@@ -30,6 +31,8 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendKeyUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTextUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -75,6 +78,12 @@ class MirrorViewModelTest {
         /** 설정하면 stop이 이 값이 완료될 때까지 멈춘다(서버 정리에 시간이 걸리는 상황). */
         var stopGate: CompletableDeferred<Unit>? = null
         override suspend fun sendTouch(event: TouchEvent) { touches += event }
+        val inputs = mutableListOf<String>()
+        override suspend fun pressKey(key: DeviceKey) { inputs += "key:$key" }
+        override suspend fun injectText(text: String) { inputs += "text:$text" }
+        /** 설정하면 붙여넣기가 이 값이 완료될 때까지 멈춘다(붙여넣기 간격을 기다리는 상황). */
+        var pasteGate: CompletableDeferred<Unit>? = null
+        override suspend fun pasteText(text: String) { inputs += "paste:$text"; pasteGate?.await() }
         var keyFrameRequests = 0
         override suspend fun requestKeyFrame() { keyFrameRequests++ }
         override suspend fun stop() { stopGate?.await(); stopped = true; eventFlow.emit(SessionEvent.Ended(null)) }
@@ -170,6 +179,8 @@ class MirrorViewModelTest {
         startMirroring = StartMirroringUseCase(mirrorRepo, settingsRepo),
         stopMirroring = StopMirroringUseCase(),
         sendTouch = SendTouchUseCase(settingsRepo),
+        sendKey = SendKeyUseCase(settingsRepo),
+        sendText = SendTextUseCase(settingsRepo),
         updateSettings = UpdateSettingsUseCase(settingsRepo),
         setShowTouches = SetShowTouchesUseCase(deviceRepo),
         captureScreenshot = CaptureScreenshotUseCase(screenshotRepo),
@@ -236,6 +247,32 @@ class MirrorViewModelTest {
         assertTrue(vm.state.value.settings.viewOnly)
         vm.onIntent(MirrorIntent.Touch(TouchAction.Up, 10, 20))
         assertEquals(1, session.touches.size)
+    }
+
+    @Test
+    fun keysAndTextGoInTypedOrder() = runTest {
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.Text("안녕 "))
+        vm.onIntent(MirrorIntent.Key(DeviceKey.Backspace))
+        vm.onIntent(MirrorIntent.Text("ok"))
+        vm.onIntent(MirrorIntent.Text("a\nb", paste = true))
+        testScheduler.advanceUntilIdle()
+        assertEquals(listOf("paste:안녕 ", "key:Backspace", "text:ok", "paste:a\nb"), session.inputs)
+    }
+
+    @Test
+    fun textQueuedWhilePastingIsMergedUntilAKey() = runTest {
+        val gate = CompletableDeferred<Unit>().also { session.pasteGate = it }
+        val vm = viewModel()
+        vm.onIntent(MirrorIntent.Text("테")) // 이 붙여넣기가 끝나기 전에 다음 음절들이 쌓인다
+        vm.onIntent(MirrorIntent.Text("스"))
+        vm.onIntent(MirrorIntent.Text("트"))
+        vm.onIntent(MirrorIntent.Key(DeviceKey.Enter))
+        vm.onIntent(MirrorIntent.Text("a"))
+        session.pasteGate = null
+        gate.complete(Unit)
+        testScheduler.advanceUntilIdle()
+        assertEquals(listOf("paste:테", "paste:스트", "key:Enter", "text:a"), session.inputs)
     }
 
     @Test
