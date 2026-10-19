@@ -91,7 +91,7 @@ class MirrorViewModel(
     private val installLock = Mutex()
     private var sessionSeq = 0
 
-    /** 키·글자는 친 순서대로 가야 하므로 한 줄로 세워 하나씩 보낸다. */
+    /** 키·글자는 친 순서대로 가야 하므로 한 줄로 세워 하나씩 보낸다. 앞 입력을 보내는 사이 쌓인 글자는 합쳐 보낸다. */
     private val keyboard = Channel<MirrorIntent>(Channel.UNLIMITED)
 
     init {
@@ -102,7 +102,24 @@ class MirrorViewModel(
                 if (changed && _session.value != null) launch { syncShowTouches() }
             }
         }
-        viewModelScope.launch { for (input in keyboard) deliverKeyboard(input) }
+        viewModelScope.launch {
+            var held: MirrorIntent? = null
+            while (true) {
+                val input = held ?: keyboard.receive()
+                held = null
+                if (input !is MirrorIntent.Text || input.paste) {
+                    deliverKeyboard(input)
+                    continue
+                }
+                // 한글은 붙여넣기 사이를 띄우므로, 그동안 쌓인 음절을 한 번에 보내 붙여넣기 횟수를 줄인다.
+                val text = StringBuilder(input.text)
+                while (true) {
+                    val next = keyboard.tryReceive().getOrNull() ?: break
+                    if (next is MirrorIntent.Text && !next.paste) text.append(next.text) else { held = next; break }
+                }
+                deliverKeyboard(MirrorIntent.Text(text.toString()))
+            }
+        }
         connect()
     }
 
