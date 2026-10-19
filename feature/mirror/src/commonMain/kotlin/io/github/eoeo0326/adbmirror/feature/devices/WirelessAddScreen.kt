@@ -29,7 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 
-/** 무선 기기 추가 화면. 기기 목록과 같은 ViewModel을 쓴다. [onBack]이 있으면 TopBar에 뒤로 버튼을 둔다(Android). */
+/** 무선 기기 추가 화면. 기기 목록과 같은 ViewModel을 쓴다. [onBack]이 있으면 뒤로 버튼이 있는 TopBar를 둔다(Android). */
 @Composable
 fun WirelessAddRoute(viewModel: DeviceListViewModel, onBack: (() -> Unit)?, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsState()
@@ -41,14 +41,15 @@ fun WirelessAddRoute(viewModel: DeviceListViewModel, onBack: (() -> Unit)?, modi
 @Composable
 fun WirelessAddScreen(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit, onBack: (() -> Unit)?, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text("무선 기기 추가", fontWeight = FontWeight.SemiBold) },
-            navigationIcon = {
-                if (onBack != null) {
+        // Desktop은 창 제목이 "무선 기기 추가"라 TopBar 없이 탭부터 보인다.
+        if (onBack != null) {
+            TopAppBar(
+                title = { Text("무선 기기 추가", fontWeight = FontWeight.SemiBold) },
+                navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.semantics { contentDescription = "뒤로" }) { Text("←", style = MaterialTheme.typography.titleLarge) }
-                }
-            },
-        )
+                },
+            )
+        }
         PrimaryTabRow(selectedTabIndex = form.tab.ordinal) {
             WirelessTab.entries.forEach { tab ->
                 Tab(
