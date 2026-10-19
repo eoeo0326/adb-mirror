@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,7 +43,13 @@ import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
  * 확정된 글이 바뀐 만큼만(지워진 만큼 Backspace, 늘어난 만큼 글자) 보낸다.
  */
 @Composable
-internal fun KeyboardInput(focusRequester: FocusRequester, onIntent: (MirrorIntent) -> Unit, modifier: Modifier = Modifier) {
+internal fun KeyboardInput(
+    focusRequester: FocusRequester,
+    onIntent: (MirrorIntent) -> Unit,
+    modifier: Modifier = Modifier,
+    /** false면 포커스가 가도 화면 키보드를 띄우지 않는다. 입력기 연결(한글 조합)은 그대로다. */
+    showSoftKeyboard: Boolean = true,
+) {
     var value by remember { mutableStateOf(TextFieldValue()) }
     /** 입력란의 확정된 글 중 기기로 이미 보낸 것. */
     var sent by remember { mutableStateOf("") }
@@ -85,6 +92,7 @@ internal fun KeyboardInput(focusRequester: FocusRequester, onIntent: (MirrorInte
                     onIntent(MirrorIntent.Key(key))
                     true
                 },
+            keyboardOptions = KeyboardOptions(showKeyboardOnFocus = showSoftKeyboard),
             textStyle = TextStyle(color = Color.Transparent),
             cursorBrush = SolidColor(Color.Transparent),
         )
