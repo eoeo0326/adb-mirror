@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
+import io.github.eoeo0326.adbmirror.core.domain.usecase.WirelessInput
 
 /** 무선 기기 추가 화면. 기기 목록과 같은 ViewModel을 쓴다. [onBack]이 있으면 뒤로 버튼이 있는 TopBar를 둔다(Android). */
 @Composable
@@ -88,12 +89,13 @@ private val WirelessTab.label: String
 private fun PairTab(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit) {
     fun edit(f: WirelessForm) = onIntent(DeviceListIntent.EditWireless(f))
     Help(
-        "처음 한 번은 페어링이 필요합니다. 기기에서 설정 > 개발자 옵션 > 무선 디버깅 > \"페어링 코드로 기기 페어링\"을 열고, 그 창의 IP 주소·포트·코드를 입력하세요." +
-            if (form.canPairByNotification) {
-                " 이 폰 자신은 \"알림으로 이 폰 페어링\"을 누른 뒤, 설정의 페어링 창에 나온 코드를 알림에 답장으로 입력하세요."
-            } else {
-                " 기기와 이 컴퓨터가 같은 Wi-Fi에 있어야 합니다."
-            },
+        "처음 한 번은 페어링이 필요합니다.",
+        "기기에서 설정 > 개발자 옵션 > 무선 디버깅 > \"페어링 코드로 기기 페어링\"을 열고, 그 창의 IP 주소·포트·코드를 입력하세요.",
+        if (form.canPairByNotification) {
+            "이 폰 자신은 \"알림으로 이 폰 페어링\"을 누른 뒤, 설정의 페어링 창에 나온 코드를 알림에 답장으로 입력하세요."
+        } else {
+            "기기와 이 컴퓨터가 같은 Wi-Fi에 있어야 합니다."
+        },
     )
     if (form.canPairByNotification) {
         OutlinedButton(onClick = { onIntent(DeviceListIntent.PairByNotification) }, enabled = !form.busy, modifier = Modifier.fillMaxWidth()) {
@@ -101,7 +103,7 @@ private fun PairTab(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit) {
         }
     }
     FoundServices(form, WirelessService.Kind.Pairing, onIntent)
-    Field("IP 주소", form.host, KeyboardType.Uri, !form.busy) { edit(form.copy(host = it)) }
+    HostField(form) { edit(form.copy(host = it)) }
     Field("페어링 포트", form.pairPort, KeyboardType.Number, !form.busy) { edit(form.copy(pairPort = it)) }
     Field("코드 6자리", form.code, KeyboardType.Number, !form.busy) { edit(form.copy(code = it)) }
     Button(onClick = { onIntent(DeviceListIntent.Pair) }, enabled = !form.busy, modifier = Modifier.fillMaxWidth()) { Text("페어링") }
@@ -110,16 +112,34 @@ private fun PairTab(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit) {
 @Composable
 private fun ConnectTab(form: WirelessForm, onIntent: (DeviceListIntent) -> Unit) {
     fun edit(f: WirelessForm) = onIntent(DeviceListIntent.EditWireless(f))
-    Help("페어링한 기기는 무선 디버깅 화면 위쪽의 \"IP 주소 및 포트\"로 연결합니다. 무선 디버깅을 다시 켜면 포트가 바뀝니다.")
+    Help(
+        "페어링한 기기는 무선 디버깅 화면 위쪽의 \"IP 주소 및 포트\"로 연결합니다.",
+        "무선 디버깅을 다시 켜면 포트가 바뀝니다.",
+    )
     FoundServices(form, WirelessService.Kind.Connect, onIntent)
-    Field("IP 주소", form.host, KeyboardType.Uri, !form.busy) { edit(form.copy(host = it)) }
+    HostField(form) { edit(form.copy(host = it)) }
     Field("연결 포트", form.connectPort, KeyboardType.Number, !form.busy) { edit(form.copy(connectPort = it)) }
     Button(onClick = { onIntent(DeviceListIntent.ConnectWireless) }, enabled = !form.busy, modifier = Modifier.fillMaxWidth()) { Text("연결") }
 }
 
+/** 안내 문구. 문장마다 줄을 바꾼다. */
 @Composable
-private fun Help(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun Help(vararg sentences: String) {
+    Text(sentences.joinToString("\n"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+/** IP 주소 칸. 끝자리만 입력하면 [WirelessInput.DEFAULT_SUBNET] 대역으로 본다(바꾸는 일은 UseCase가 한다). */
+@Composable
+private fun HostField(form: WirelessForm, onChange: (String) -> Unit) {
+    Field(
+        label = "IP 주소",
+        value = form.host,
+        type = KeyboardType.Uri,
+        enabled = !form.busy,
+        placeholder = "${WirelessInput.DEFAULT_SUBNET}XX",
+        supporting = "끝자리만 입력하면 ${WirelessInput.DEFAULT_SUBNET}{숫자}로 연결합니다.\n다른 대역이면 IP 주소 전체를 입력하세요.",
+        onChange = onChange,
+    )
 }
 
 /** 같은 네트워크에서 찾은 [kind] 서비스. 연결 서비스는 누르면 바로 연결하고, 페어링 서비스는 주소·포트를 채운다. */
@@ -136,11 +156,22 @@ private fun FoundServices(form: WirelessForm, kind: WirelessService.Kind, onInte
 }
 
 @Composable
-private fun Field(label: String, value: String, type: KeyboardType, enabled: Boolean, modifier: Modifier = Modifier, onChange: (String) -> Unit) {
+private fun Field(
+    label: String,
+    value: String,
+    type: KeyboardType,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    supporting: String? = null,
+    onChange: (String) -> Unit,
+) {
     OutlinedTextField(
         value = value,
         onValueChange = { onChange(it.trim()) },
         label = { Text(label) },
+        placeholder = placeholder?.let { { Text(it) } },
+        supportingText = supporting?.let { { Text(it) } },
         singleLine = true,
         enabled = enabled,
         keyboardOptions = KeyboardOptions(keyboardType = type),
