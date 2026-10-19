@@ -13,6 +13,7 @@
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name="io.github.eoeo0326.adbmirror.MainActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

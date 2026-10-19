@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -107,7 +109,17 @@ private fun AndroidApp(graph: AndroidAppGraph) {
             scope.launch { current.close() }
         }
         val conversion = remember(current) { ConversionHost.Overlay(current.conversion, AndroidFileOpener(context)) }
-        MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize().safeDrawingPadding())
+        // 블루투스·USB 키보드가 연결됐을 때만 입력을 받는다. 화면 키보드는 영상을 가리므로 띄우지 않는다.
+        val configuration = LocalConfiguration.current
+        val hardwareKeyboard = configuration.keyboard != Configuration.KEYBOARD_NOKEYS &&
+            configuration.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+        MirrorRoute(
+            current.viewModel,
+            conversion,
+            Modifier.fillMaxSize().safeDrawingPadding(),
+            keyboardInput = hardwareKeyboard,
+            showSoftKeyboard = false,
+        )
     }
 }
 
