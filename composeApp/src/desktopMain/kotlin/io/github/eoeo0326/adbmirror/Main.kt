@@ -182,7 +182,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                     // 미러링 창에 APK를 끌어 놓으면 이 기기에 설치한다.
                     var dropping by remember { mutableStateOf(false) }
                     Box(Modifier.fillMaxSize().fileDropTarget(onHover = { dropping = it }, onDrop = { holder.viewModel.onIntent(MirrorIntent.InstallApks(it)) })) {
-                        MirrorRoute(holder.viewModel, conversionHost)
+                        MirrorRoute(holder.viewModel, conversionHost, keyboardInput = true)
                         if (dropping) ApkDropOverlay(holder.device.model ?: serial)
                     }
                 }

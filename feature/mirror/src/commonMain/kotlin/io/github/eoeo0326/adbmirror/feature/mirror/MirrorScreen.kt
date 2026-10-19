@@ -35,7 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -59,8 +63,9 @@ sealed interface ConversionHost {
     class External(val open: (List<String>) -> Unit) : ConversionHost
 }
 
+/** [keyboardInput]면 키보드로 친 글자·붙여넣기를 기기로 보낸다(하드웨어 키보드가 있는 Desktop). */
 @Composable
-fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier: Modifier = Modifier) {
+fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier: Modifier = Modifier, keyboardInput: Boolean = false) {
     val state by viewModel.state.collectAsState()
     val session by viewModel.session.collectAsState()
     val snackbar = remember { SnackbarHostState() }
@@ -95,7 +100,7 @@ fun MirrorRoute(viewModel: MirrorViewModel, conversion: ConversionHost, modifier
         }
     }
     Box(modifier) {
-        MirrorScreen(state, session, viewModel::onIntent)
+        MirrorScreen(state, session, viewModel::onIntent, keyboardInput = keyboardInput)
         if (overlay != null) {
             val conversionState by overlay.viewModel.state.collectAsState()
             conversionState.draft?.let { ConversionPanel(it, conversionState.conversion, overlay.viewModel::onIntent, overlay.opener) }
@@ -115,8 +120,16 @@ fun MirrorEffect.message(): String? = when (this) {
 }
 
 @Composable
-fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorIntent) -> Unit, modifier: Modifier = Modifier) {
+fun MirrorScreen(
+    state: MirrorState,
+    session: MirrorSession?,
+    onIntent: (MirrorIntent) -> Unit,
+    modifier: Modifier = Modifier,
+    keyboardInput: Boolean = false,
+) {
     val mirroring = state.connection as? Connection.Mirroring
+    val typing = keyboardInput && session != null && mirroring != null && !state.settings.viewOnly
+    val keyboardFocus = remember { FocusRequester() }
     Column(modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(mirroring?.deviceName ?: state.device.model ?: state.device.serial, Modifier.weight(1f), fontWeight = FontWeight.Medium, maxLines = 1)
@@ -132,7 +145,19 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
             Spacer(Modifier.width(4.dp))
             OptionsMenu(state, onIntent)
         }
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // 메뉴 등으로 포커스를 잃어도 화면을 누르면 다시 키보드 입력을 받는다. 터치는 그대로 영상으로 간다.
+        val refocus = if (typing) {
+            Modifier.pointerInput(keyboardFocus) {
+                awaitPointerEventScope {
+                    while (true) {
+                        if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) keyboardFocus.requestFocus()
+                    }
+                }
+            }
+        } else {
+            Modifier
+        }
+        Box(Modifier.weight(1f).fillMaxWidth().then(refocus), contentAlignment = Alignment.Center) {
             when (val c = state.connection) {
                 is Connection.Mirroring -> if (session != null) {
                     VideoSurface(
@@ -147,6 +172,7 @@ fun MirrorScreen(state: MirrorState, session: MirrorSession?, onIntent: (MirrorI
                 is Connection.Error -> Disconnected("연결이 끊겼습니다: ${c.message}", onIntent)
                 Connection.Idle -> Disconnected("연결을 끊었습니다", onIntent)
             }
+            if (typing) KeyboardInput(keyboardFocus, onIntent, Modifier.align(Alignment.BottomStart).padding(12.dp))
         }
     }
 }

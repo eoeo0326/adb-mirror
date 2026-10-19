@@ -13,6 +13,8 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.CopyScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.InstallApkUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendKeyUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTextUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -49,6 +51,8 @@ class MirrorViewModel(
     private val startMirroring: StartMirroringUseCase,
     private val stopMirroring: StopMirroringUseCase,
     private val sendTouch: SendTouchUseCase,
+    private val sendKey: SendKeyUseCase,
+    private val sendText: SendTextUseCase,
     private val updateSettings: UpdateSettingsUseCase,
     private val setShowTouches: SetShowTouchesUseCase,
     private val captureScreenshot: CaptureScreenshotUseCase,
@@ -87,6 +91,9 @@ class MirrorViewModel(
     private val installLock = Mutex()
     private var sessionSeq = 0
 
+    /** 키·글자는 친 순서대로 가야 하므로 한 줄로 세워 하나씩 보낸다. */
+    private val keyboard = Channel<MirrorIntent>(Channel.UNLIMITED)
+
     init {
         viewModelScope.launch {
             getSettings().collect { settings ->
@@ -95,6 +102,7 @@ class MirrorViewModel(
                 if (changed && _session.value != null) launch { syncShowTouches() }
             }
         }
+        viewModelScope.launch { for (input in keyboard) deliverKeyboard(input) }
         connect()
     }
 
@@ -103,6 +111,7 @@ class MirrorViewModel(
             MirrorIntent.Connect -> connect()
             MirrorIntent.Disconnect -> viewModelScope.launch { _session.value?.let { stopMirroring(it) } }
             is MirrorIntent.Touch -> touch(intent)
+            is MirrorIntent.Key, is MirrorIntent.Text -> keyboard.trySend(intent)
             MirrorIntent.ToggleViewOnly -> viewModelScope.launch { updateSettings { it.copy(viewOnly = !it.viewOnly) } }
             MirrorIntent.ToggleTouchEffect -> viewModelScope.launch { updateSettings { it.copy(touchEffect = !it.touchEffect) } }
             MirrorIntent.CopyScreenshot -> screenshot { copyScreenshot(it); MirrorEffect.ShowMessage("스크린샷을 클립보드에 복사했습니다") }
@@ -266,6 +275,21 @@ class MirrorViewModel(
         val session = _session.value ?: return
         val size = (_state.value.connection as? Connection.Mirroring)?.videoSize ?: return
         viewModelScope.launch { sendTouch(session, TouchEvent(intent.action, intent.x, intent.y, size)) }
+    }
+
+    private suspend fun deliverKeyboard(input: MirrorIntent) {
+        val session = _session.value ?: return
+        try {
+            when (input) {
+                is MirrorIntent.Key -> sendKey(session, input.key)
+                is MirrorIntent.Text -> sendText(session, input.text, input.paste)
+                else -> Unit
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 세션이 끝나는 중이면 보내지 못해도 된다. 다음 입력은 계속 받는다.
+        }
     }
 
     /**
