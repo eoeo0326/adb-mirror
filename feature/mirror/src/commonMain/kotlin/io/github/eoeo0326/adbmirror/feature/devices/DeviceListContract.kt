@@ -37,6 +37,8 @@ data class WirelessForm(
     val found: List<WirelessService> = emptyList(),
     /** 알림 답장으로 페어링 코드를 받을 수 있는지(Android: 이 폰 자신을 페어링할 때 설정 앱을 떠나지 않게). */
     val canPairByNotification: Boolean = false,
+    /** 추가 화면에서 보고 있는 탭. 페어링에 성공하면 연결 탭으로 넘어간다. */
+    val tab: WirelessTab = WirelessTab.Pair,
 ) {
     /**
      * 찾은 페어링 서비스로 비어 있는 페어링 칸을 채운다. 페어링 서비스는 누군가 "페어링 코드로 기기 페어링" 창을
@@ -49,6 +51,8 @@ data class WirelessForm(
         return pairing?.let { copy(host = it.host, pairPort = it.port.toString()) } ?: this
     }
 }
+
+enum class WirelessTab { Pair, Connect }
 
 sealed interface DeviceListIntent {
     data class Select(val serial: String) : DeviceListIntent
@@ -63,6 +67,9 @@ sealed interface DeviceListIntent {
     data class UseService(val service: WirelessService) : DeviceListIntent
     /** 알림으로 페어링 코드를 받기 시작한다(플랫폼이 알림을 띄우고 설정 앱을 연다). */
     data object PairByNotification : DeviceListIntent
+    /** 기기 목록의 '+'. 무선 기기 추가 화면을 연다. */
+    data object OpenWirelessAdd : DeviceListIntent
+    data class SelectWirelessTab(val tab: WirelessTab) : DeviceListIntent
 }
 
 sealed interface DeviceListResult {
@@ -72,7 +79,9 @@ sealed interface DeviceListResult {
     data class Closed(val serial: String) : DeviceListResult
     data class WirelessEdited(val form: WirelessForm) : DeviceListResult
     data class WirelessStarted(val message: String) : DeviceListResult
-    data class WirelessFinished(val message: String, val failed: Boolean) : DeviceListResult
+    /** [paired]면 페어링에 성공한 것이라 연결 탭으로 넘어간다. */
+    data class WirelessFinished(val message: String, val failed: Boolean, val paired: Boolean = false) : DeviceListResult
+    data class WirelessTabSelected(val tab: WirelessTab) : DeviceListResult
     data class ServicesFound(val services: List<WirelessService>) : DeviceListResult
 }
 
@@ -82,6 +91,12 @@ sealed interface DeviceListEffect {
 
     /** 페어링 코드를 받을 알림을 띄우고 기기의 개발자 옵션을 연다. */
     data object StartNotificationPairing : DeviceListEffect
+
+    /** 무선 기기 추가 화면(창)을 열거나 앞으로 가져온다. */
+    data object OpenWirelessAdd : DeviceListEffect
+
+    /** 추가 화면에서 기기를 연결했다. 추가 화면을 닫는다. */
+    data object WirelessConnected : DeviceListEffect
 }
 
 object DeviceListReducer {
@@ -97,9 +112,12 @@ object DeviceListReducer {
         is DeviceListResult.Closed -> state.copy(openSerials = state.openSerials - result.serial)
         // 입력을 고치면 지난 결과 문구는 지운다. 시도 중에는 입력을 바꾸지 않는다.
         is DeviceListResult.WirelessEdited ->
-            state.wireless?.takeIf { !it.busy }?.let { state.copy(wireless = result.form.copy(busy = false, message = null, failed = false, found = it.found, canPairByNotification = it.canPairByNotification)) } ?: state
+            state.wireless?.takeIf { !it.busy }?.let { state.copy(wireless = result.form.copy(busy = false, message = null, failed = false, found = it.found, canPairByNotification = it.canPairByNotification, tab = it.tab)) } ?: state
         is DeviceListResult.WirelessStarted -> state.copy(wireless = state.wireless?.copy(busy = true, message = result.message, failed = false))
-        is DeviceListResult.WirelessFinished -> state.copy(wireless = state.wireless?.copy(busy = false, message = result.message, failed = result.failed))
+        is DeviceListResult.WirelessFinished -> state.copy(
+            wireless = state.wireless?.let { it.copy(busy = false, message = result.message, failed = result.failed, tab = if (result.paired) WirelessTab.Connect else it.tab) },
+        )
+        is DeviceListResult.WirelessTabSelected -> state.copy(wireless = state.wireless?.copy(tab = result.tab))
         is DeviceListResult.ServicesFound -> state.copy(wireless = state.wireless?.copy(found = result.services)?.autofilled())
     }
 }

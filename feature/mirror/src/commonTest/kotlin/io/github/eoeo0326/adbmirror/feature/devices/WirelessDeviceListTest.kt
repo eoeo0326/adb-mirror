@@ -14,10 +14,13 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetKnownWirelessDevicesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.PairDeviceUseCase
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -202,5 +205,58 @@ class WirelessDeviceListTest {
         assertTrue(vm.state.value.wireless!!.canPairByNotification, "입력을 고쳐도 유지")
         vm.onIntent(DeviceListIntent.PairByNotification)
         assertEquals(DeviceListEffect.StartNotificationPairing, vm.effects.first())
+    }
+
+    /** 지금까지 쌓인 effect를 모두 꺼낸다(기다리지 않음). */
+    private fun DeviceListViewModel.drainEffects(scope: CoroutineScope): List<DeviceListEffect> {
+        val got = mutableListOf<DeviceListEffect>()
+        val job = scope.launch(start = CoroutineStart.UNDISPATCHED) { effects.collect { got += it } }
+        job.cancel()
+        return got
+    }
+
+    @Test
+    fun addScreenOpensOnlyWhenPlatformSupportsWireless() = runTest {
+        val web = vm(withWireless = false)
+        web.onIntent(DeviceListIntent.OpenWirelessAdd)
+        assertTrue(web.drainEffects(backgroundScope).isEmpty())
+
+        val desktop = vm()
+        desktop.onIntent(DeviceListIntent.OpenWirelessAdd)
+        assertEquals(listOf<DeviceListEffect>(DeviceListEffect.OpenWirelessAdd), desktop.drainEffects(backgroundScope))
+    }
+
+    @Test
+    fun pairSuccessMovesToConnectTabAndFailureStays() = runTest {
+        val vm = vm()
+        assertEquals(WirelessTab.Pair, vm.state.value.wireless!!.tab)
+        vm.onIntent(DeviceListIntent.EditWireless(WirelessForm(host = "h", pairPort = "1", code = "12")))
+        vm.onIntent(DeviceListIntent.Pair)
+        assertEquals(WirelessTab.Pair, vm.state.value.wireless!!.tab, "실패하면 페어링 탭에 남는다")
+
+        vm.onIntent(DeviceListIntent.EditWireless(vm.state.value.wireless!!.copy(code = "123456")))
+        vm.onIntent(DeviceListIntent.Pair)
+        assertEquals(WirelessTab.Connect, vm.state.value.wireless!!.tab)
+        assertEquals("h", vm.state.value.wireless!!.host, "주소는 연결 탭에서도 그대로 쓴다")
+
+        vm.onIntent(DeviceListIntent.SelectWirelessTab(WirelessTab.Pair))
+        assertEquals(WirelessTab.Pair, vm.state.value.wireless!!.tab)
+        assertTrue(vm.drainEffects(backgroundScope).isEmpty(), "페어링만으로는 화면을 닫지 않는다")
+    }
+
+    @Test
+    fun connectSuccessClosesAddScreenButFailureDoesNot() = runTest {
+        val vm = vm()
+        failConnect = "연결하지 못했습니다"
+        vm.onIntent(DeviceListIntent.EditWireless(WirelessForm(host = "192.168.0.12", connectPort = "43025")))
+        vm.onIntent(DeviceListIntent.ConnectWireless)
+        assertTrue(vm.drainEffects(backgroundScope).isEmpty())
+
+        failConnect = null
+        vm.onIntent(DeviceListIntent.ConnectWireless)
+        assertEquals(listOf<DeviceListEffect>(DeviceListEffect.WirelessConnected), vm.drainEffects(backgroundScope))
+
+        vm.onIntent(DeviceListIntent.UseService(connect("192.168.0.13", 40000)))
+        assertEquals(listOf<DeviceListEffect>(DeviceListEffect.WirelessConnected), vm.drainEffects(backgroundScope), "찾은 연결 서비스로 연결해도 닫는다")
     }
 }

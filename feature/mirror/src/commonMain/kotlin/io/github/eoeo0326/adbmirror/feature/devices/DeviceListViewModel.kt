@@ -79,11 +79,11 @@ class DeviceListViewModel(
             }
             is DeviceListIntent.MirrorClosed -> reduce(DeviceListResult.Closed(intent.serial))
             is DeviceListIntent.EditWireless -> reduce(DeviceListResult.WirelessEdited(intent.form))
-            DeviceListIntent.Pair -> wirelessAction("페어링하는 중…") { w, f ->
+            DeviceListIntent.Pair -> wirelessAction("페어링하는 중…", paired = true) { w, f ->
                 w.pair(f.host, f.pairPort, f.code)
                 "페어링했습니다. 이제 연결 포트로 연결하세요"
             }
-            DeviceListIntent.ConnectWireless -> wirelessAction("연결하는 중…") { w, f ->
+            DeviceListIntent.ConnectWireless -> wirelessAction("연결하는 중…", onSuccess = DeviceListEffect.WirelessConnected) { w, f ->
                 val device = w.connect(f.host, f.connectPort)
                 "${device.model ?: device.serial}에 연결했습니다"
             }
@@ -91,6 +91,8 @@ class DeviceListViewModel(
             is DeviceListIntent.UseService -> useService(intent.service)
             DeviceListIntent.PairByNotification ->
                 if (wireless?.notificationPairing == true) _effects.trySend(DeviceListEffect.StartNotificationPairing)
+            DeviceListIntent.OpenWirelessAdd -> if (wireless != null) _effects.trySend(DeviceListEffect.OpenWirelessAdd)
+            is DeviceListIntent.SelectWirelessTab -> reduce(DeviceListResult.WirelessTabSelected(intent.tab))
         }
     }
 
@@ -130,21 +132,30 @@ class DeviceListViewModel(
         }
     }
 
-    /** 무선 작업을 하나씩만 돌린다. 입력 오류·연결 실패는 폼 아래 문구로 보여 준다. */
-    private fun wirelessAction(progress: String, block: suspend (WirelessActions, WirelessForm) -> String) {
+    /**
+     * 무선 작업을 하나씩만 돌린다. 입력 오류·연결 실패는 폼 아래 문구로 보여 준다.
+     * 성공하면 [paired]일 때 연결 탭으로 넘기고, [onSuccess]가 있으면 보낸다.
+     */
+    private fun wirelessAction(
+        progress: String,
+        paired: Boolean = false,
+        onSuccess: DeviceListEffect? = null,
+        block: suspend (WirelessActions, WirelessForm) -> String,
+    ) {
         val w = wireless ?: return
         val form = _state.value.wireless ?: return
         if (form.busy) return
         reduce(DeviceListResult.WirelessStarted(progress))
         viewModelScope.launch {
             val result = try {
-                DeviceListResult.WirelessFinished(block(w, form), failed = false)
+                DeviceListResult.WirelessFinished(block(w, form), failed = false, paired = paired)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 DeviceListResult.WirelessFinished(e.message ?: e::class.simpleName ?: "실패했습니다", failed = true)
             }
             reduce(result)
+            if (!result.failed) onSuccess?.let { _effects.trySend(it) }
         }
     }
 
