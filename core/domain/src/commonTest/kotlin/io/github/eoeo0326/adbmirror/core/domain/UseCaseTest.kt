@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror.core.domain
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.DeviceState
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
@@ -11,6 +12,8 @@ import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
 import io.github.eoeo0326.adbmirror.core.domain.usecase.ConvertRecordingUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.DeviceNotSelectableException
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetDevicesUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendKeyUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTextUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -131,5 +134,39 @@ class UseCaseTest {
         val previous = useCase("S1", false)
         useCase("S1", previous)
         assertEquals(listOf("S1" to false, "S1" to true), repo.showTouchesCalls)
+    }
+
+    @Test
+    fun typedAsciiIsInjectedAndOtherTextIsPasted() = runTest {
+        val session = FakeSession()
+        val send = SendTextUseCase(FakeSettingsRepository())
+        send(session, "Hi!")
+        send(session, "안녕 ")
+        send(session, "a\r\n한\n")
+        assertEquals(listOf("text:Hi!", "paste:안녕 ", "text:a", "key:Enter", "paste:한", "key:Enter"), session.inputs)
+    }
+
+    @Test
+    fun longAsciiIsSplitIntoInjectTextLimit() = runTest {
+        val session = FakeSession()
+        SendTextUseCase(FakeSettingsRepository())(session, "x".repeat(SendTextUseCase.MAX_INJECT_TEXT + 1))
+        assertEquals(listOf("text:" + "x".repeat(SendTextUseCase.MAX_INJECT_TEXT), "text:x"), session.inputs)
+    }
+
+    @Test
+    fun pasteKeepsNewlines() = runTest {
+        val session = FakeSession()
+        SendTextUseCase(FakeSettingsRepository())(session, "line1\nline2", paste = true)
+        assertEquals(listOf("paste:line1\nline2"), session.inputs)
+    }
+
+    @Test
+    fun keyboardIsIgnoredInViewOnly() = runTest {
+        val session = FakeSession()
+        val settings = FakeSettingsRepository(Settings(viewOnly = true))
+        SendKeyUseCase(settings)(session, DeviceKey.Enter)
+        SendTextUseCase(settings)(session, "abc")
+        SendTextUseCase(settings)(session, "abc", paste = true)
+        assertTrue(session.inputs.isEmpty())
     }
 }

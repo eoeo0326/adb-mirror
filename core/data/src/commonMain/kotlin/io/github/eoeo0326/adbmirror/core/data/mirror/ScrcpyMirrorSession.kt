@@ -4,6 +4,7 @@ import io.github.eoeo0326.adbmirror.core.adb.EndOfStreamException
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ControlMessageSerializer
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyConnection
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.VideoStreamParser
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.EncodedPacket
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
@@ -15,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -23,6 +25,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * scrcpy 연결 하나를 [MirrorSession]으로 감싼다. 영상 소켓을 [scope]에서 읽어
@@ -44,6 +48,10 @@ class ScrcpyMirrorSession(
     override val packets: SharedFlow<EncodedPacket> = _packets.asSharedFlow()
 
     private val controlLock = Mutex()
+
+    /** 마지막으로 붙여넣기를 보낸 때. 다음 붙여넣기가 기기 클립보드를 너무 일찍 바꾸지 않게 한다. */
+    private val pasteLock = Mutex()
+    private var lastPaste: TimeSource.Monotonic.ValueTimeMark? = null
 
     /** 서버가 화면 캡처를 시작했는지(첫 세션 패킷). 그 전에 RESET_VIDEO를 보내면 서버 컨트롤 스레드가 죽는다. */
     private val captureStarted = CompletableDeferred<Unit>()
@@ -109,6 +117,20 @@ class ScrcpyMirrorSession(
 
     override suspend fun sendTouch(event: TouchEvent) = sendControl(ControlMessageSerializer.touch(event))
 
+    override suspend fun pressKey(key: DeviceKey) = sendControl(ControlMessageSerializer.keyPress(key))
+
+    override suspend fun injectText(text: String) = sendControl(ControlMessageSerializer.injectText(text))
+
+    /**
+     * 서버는 클립보드를 바꾸고 PASTE 키를 비동기로 누른다. 앱이 그 키를 처리하기 전에 다음 붙여넣기가 클립보드를 바꾸면
+     * 앞 글자 대신 뒤 글자가 두 번 붙으므로, 붙여넣기 사이를 [PASTE_GAP]만큼 띄운다.
+     */
+    override suspend fun pasteText(text: String) = pasteLock.withLock {
+        lastPaste?.let { delay(PASTE_GAP - it.elapsedNow()) }
+        sendControl(ControlMessageSerializer.setClipboard(text, paste = true))
+        lastPaste = TimeSource.Monotonic.markNow()
+    }
+
     /** 캡처가 시작되기 전이면 시작될 때까지 기다렸다가 보낸다. */
     override suspend fun requestKeyFrame() {
         captureStarted.await()
@@ -142,5 +164,6 @@ class ScrcpyMirrorSession(
     private companion object {
         const val EVENT_REPLAY = 4
         const val PACKET_BUFFER = 64
+        val PASTE_GAP = 200.milliseconds
     }
 }

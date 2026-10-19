@@ -1,6 +1,7 @@
 package io.github.eoeo0326.adbmirror.core.domain.usecase
 
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
@@ -44,6 +45,42 @@ class SendTouchUseCase(private val settings: SettingsRepository) {
                 y = event.y.coerceIn(0, size.height - 1),
             ),
         )
+    }
+}
+
+/** 키 하나를 보낸다. 보기 전용이면 보내지 않는다. */
+class SendKeyUseCase(private val settings: SettingsRepository) {
+    suspend operator fun invoke(session: MirrorSession, key: DeviceKey) {
+        if (settings.settings.first().viewOnly) return
+        session.pressKey(key)
+    }
+}
+
+/**
+ * 글자를 보낸다. 보기 전용이면 보내지 않는다.
+ * - 친 글자: 줄바꿈은 Enter 키로 보낸다. 줄마다 ASCII만 있으면 키 입력(INJECT_TEXT)으로, 아니면(한글 등) 붙여넣기로 보낸다.
+ * - [paste]: 줄바꿈까지 그대로 붙여넣기로 보낸다. 여러 줄을 붙여 넣어도 Enter가 눌리지 않는다.
+ */
+class SendTextUseCase(private val settings: SettingsRepository) {
+    suspend operator fun invoke(session: MirrorSession, text: String, paste: Boolean = false) {
+        if (text.isEmpty() || settings.settings.first().viewOnly) return
+        if (paste) return session.pasteText(text)
+        text.replace("\r\n", "\n").split('\n').forEachIndexed { i, line ->
+            if (i > 0) session.pressKey(DeviceKey.Enter)
+            when {
+                line.isEmpty() -> Unit
+                line.all { it in TYPABLE } -> line.chunked(MAX_INJECT_TEXT).forEach { session.injectText(it) }
+                else -> session.pasteText(line)
+            }
+        }
+    }
+
+    companion object {
+        /** 기기 키맵에 있다고 볼 수 있는 글자. 이 밖의 글자는 서버가 키 입력으로 바꾸지 못한다. */
+        private val TYPABLE = ' '..'~'
+
+        /** scrcpy INJECT_TEXT 한 번의 최대 길이(바이트). [TYPABLE]은 1바이트라 글자 수와 같다. */
+        const val MAX_INJECT_TEXT = 300
     }
 }
 
