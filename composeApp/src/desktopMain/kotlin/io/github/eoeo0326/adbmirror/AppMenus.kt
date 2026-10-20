@@ -79,13 +79,14 @@ fun FrameWindowScope.WindowMenuBar(onCloseWindow: () -> Unit, onOpenSettings: ()
     }
 }
 
-/** 기기 목록 창 메뉴 막대. macOS는 앱 메뉴에 설정(⌘,)·종료가 있어 따로 두지 않는다. */
+/** 기기 목록 창 메뉴 막대. macOS는 앱 메뉴에 설정(⌘,)·종료가 있어 따로 두지 않는다(업데이트 확인은 설정 창에서). */
 @Composable
-fun FrameWindowScope.DeviceListMenuBar(onOpenSettings: () -> Unit, onQuit: () -> Unit) {
+fun FrameWindowScope.DeviceListMenuBar(onOpenSettings: () -> Unit, onCheckUpdate: () -> Unit, onQuit: () -> Unit) {
     if (isMac) return
     MenuBar {
         Menu("파일") {
             Item("설정…", shortcut = shortcut(Key.Comma), onClick = onOpenSettings)
+            Item("업데이트 확인…", onClick = onCheckUpdate)
             Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
         }
     }
