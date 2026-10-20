@@ -224,6 +224,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
         Window(onCloseRequest = { wirelessOpen = false }, title = "무선 기기 추가", state = rememberWindowState(size = DpSize(440.dp, 640.dp))) {
             val focus by wirelessFocus
             LaunchedEffect(focus) { window.toFront() }
+            WindowMenuBar(onCloseWindow = { wirelessOpen = false }, onOpenSettings = openSettings, onQuit = quit)
             AppTheme { WirelessAddRoute(listViewModel, onBack = null) }
         }
     }
