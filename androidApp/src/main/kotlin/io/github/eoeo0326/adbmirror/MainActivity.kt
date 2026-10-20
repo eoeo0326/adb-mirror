@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -24,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -36,6 +38,7 @@ import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListEffect
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
+import io.github.eoeo0326.adbmirror.feature.devices.WirelessAddRoute
 import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
@@ -74,6 +77,7 @@ private class MirrorHolder(val device: Device, graph: AndroidAppGraph) {
 private fun AndroidApp(graph: AndroidAppGraph) {
     val listViewModel = remember { graph.deviceListViewModel() }
     var mirror by remember { mutableStateOf<MirrorHolder?>(null) }
+    var addingWireless by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -86,6 +90,8 @@ private fun AndroidApp(graph: AndroidAppGraph) {
                     mirror?.let { old -> scope.launch { old.close() } }
                     mirror = MirrorHolder(effect.device, graph)
                 }
+                DeviceListEffect.OpenWirelessAdd -> addingWireless = true
+                DeviceListEffect.WirelessConnected -> addingWireless = false
                 DeviceListEffect.StartNotificationPairing ->
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                         ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -98,7 +104,10 @@ private fun AndroidApp(graph: AndroidAppGraph) {
         }
     }
     val current = mirror
-    if (current == null) {
+    if (current == null && addingWireless) {
+        BackHandler { addingWireless = false }
+        WirelessAddRoute(listViewModel, onBack = { addingWireless = false }, Modifier.fillMaxSize().safeDrawingPadding())
+    } else if (current == null) {
         DeviceListRoute(listViewModel, Modifier.fillMaxSize().safeDrawingPadding())
     } else {
         BackHandler {
@@ -107,7 +116,17 @@ private fun AndroidApp(graph: AndroidAppGraph) {
             scope.launch { current.close() }
         }
         val conversion = remember(current) { ConversionHost.Overlay(current.conversion, AndroidFileOpener(context)) }
-        MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize().safeDrawingPadding())
+        // 블루투스·USB 키보드가 연결됐을 때만 입력을 받는다. 화면 키보드는 영상을 가리므로 띄우지 않는다.
+        val configuration = LocalConfiguration.current
+        val hardwareKeyboard = configuration.keyboard != Configuration.KEYBOARD_NOKEYS &&
+            configuration.hardKeyboardHidden == Configuration.HARDKEYBOARDHIDDEN_NO
+        MirrorRoute(
+            current.viewModel,
+            conversion,
+            Modifier.fillMaxSize().safeDrawingPadding(),
+            keyboardInput = hardwareKeyboard,
+            showSoftKeyboard = false,
+        )
     }
 }
 

@@ -36,6 +36,7 @@ import io.github.eoeo0326.adbmirror.feature.conversion.ConversionRoute
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListEffect
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListIntent
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListRoute
+import io.github.eoeo0326.adbmirror.feature.devices.WirelessAddRoute
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.mirror.ConversionHost
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
@@ -107,6 +108,8 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
         settingsOpen = true
         settingsFocus.intValue++
     }
+    var wirelessOpen by remember { mutableStateOf(false) }
+    val wirelessFocus = remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(Unit) {
         listViewModel.effects.collect { effect ->
@@ -123,7 +126,12 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                         openWindows[serial] = MirrorWindowHolder(effect.device, graph, state)
                     }
                 }
-                // Desktop은 무선 기기 추가를 지원하지 않아 오지 않는다.
+                DeviceListEffect.OpenWirelessAdd -> {
+                    wirelessOpen = true
+                    wirelessFocus.intValue++
+                }
+                DeviceListEffect.WirelessConnected -> wirelessOpen = false
+                // Desktop은 알림 페어링을 지원하지 않아 오지 않는다.
                 DeviceListEffect.StartNotificationPairing -> Unit
             }
         }
@@ -182,7 +190,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                     // 미러링 창에 APK를 끌어 놓으면 이 기기에 설치한다.
                     var dropping by remember { mutableStateOf(false) }
                     Box(Modifier.fillMaxSize().fileDropTarget(onHover = { dropping = it }, onDrop = { holder.viewModel.onIntent(MirrorIntent.InstallApks(it)) })) {
-                        MirrorRoute(holder.viewModel, conversionHost)
+                        MirrorRoute(holder.viewModel, conversionHost, keyboardInput = true)
                         if (dropping) ApkDropOverlay(holder.device.model ?: serial)
                     }
                 }
@@ -206,9 +214,18 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                 LaunchedEffect(holder) {
                     holder.viewModel.effects.collect { if (it is ConversionEffect.Closed) closeWindow() }
                 }
-                ConversionMenuBar(onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
+                WindowMenuBar(onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
                 AppTheme { ConversionRoute(holder.viewModel, DesktopFileOpener) }
             }
+        }
+    }
+
+    if (wirelessOpen) {
+        Window(onCloseRequest = { wirelessOpen = false }, title = "무선 기기 추가", state = rememberWindowState(size = DpSize(440.dp, 640.dp))) {
+            val focus by wirelessFocus
+            LaunchedEffect(focus) { window.toFront() }
+            WindowMenuBar(onCloseWindow = { wirelessOpen = false }, onOpenSettings = openSettings, onQuit = quit)
+            AppTheme { WirelessAddRoute(listViewModel, onBack = null) }
         }
     }
 
@@ -216,6 +233,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
         Window(onCloseRequest = { settingsOpen = false }, title = "ADB Mirror 설정", state = rememberWindowState(size = DpSize(460.dp, 700.dp))) {
             val focus by settingsFocus
             LaunchedEffect(focus) { window.toFront() }
+            WindowMenuBar(onCloseWindow = { settingsOpen = false }, onOpenSettings = openSettings, onQuit = quit)
             AppTheme { SettingsRoute(settingsViewModel, platform) }
         }
     }

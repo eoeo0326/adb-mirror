@@ -64,9 +64,9 @@ fun FrameWindowScope.MirrorMenuBar(
     }
 }
 
-/** 변환 창 메뉴 막대. 창 닫기(⌘W)를 다른 창과 맞춘다. */
+/** 변환·설정 창처럼 창 닫기만 있는 보조 창의 메뉴 막대. 창 닫기(⌘W)를 다른 창과 맞춘다. */
 @Composable
-fun FrameWindowScope.ConversionMenuBar(onCloseWindow: () -> Unit, onOpenSettings: () -> Unit, onQuit: () -> Unit) {
+fun FrameWindowScope.WindowMenuBar(onCloseWindow: () -> Unit, onOpenSettings: () -> Unit, onQuit: () -> Unit) {
     MenuBar {
         Menu("파일") {
             Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)

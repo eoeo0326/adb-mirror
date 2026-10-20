@@ -34,6 +34,8 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.GetSettingsUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.GetVideoInfoUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.PairDeviceUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SaveScreenshotUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendKeyUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTextUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SendTouchUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.SetShowTouchesUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.StartMirroringUseCase
@@ -93,6 +95,8 @@ class AndroidAppGraph(context: Context, privateDir: File) {
         startMirroring = StartMirroringUseCase(mirror, settings),
         stopMirroring = StopMirroringUseCase(),
         sendTouch = SendTouchUseCase(settings),
+        sendKey = SendKeyUseCase(settings),
+        sendText = SendTextUseCase(settings),
         updateSettings = UpdateSettingsUseCase(settings),
         setShowTouches = SetShowTouchesUseCase(devices),
         captureScreenshot = CaptureScreenshotUseCase(screenshots),

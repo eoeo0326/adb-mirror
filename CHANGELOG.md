@@ -4,6 +4,34 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
+키보드 입력 릴리즈입니다. Desktop·Web 미러링 화면과 Android 앱(하드웨어 키보드)에서 기기에 글자를 치고 컴퓨터 클립보드의 글을 붙여 넣을 수 있습니다. 한글은 컴퓨터 입력기로 조합해 보냅니다. 무선 기기 추가는 기기 선택 화면의 '+'로 여는 별도 화면(페어링·연결 탭)으로 옮겼습니다.
+
+### 추가
+- Desktop: 미러링 창에서 키보드로 기기에 글자를 입력한다. 한/영 전환은 컴퓨터 입력기로 하고, 조합 중인 한글은 창 왼쪽 아래에 보였다가 확정되면 보낸다. Enter·Backspace·Delete·Tab·Esc·방향키·Home/End·PageUp/Down도 보낸다
+- Desktop: ⌘V(Ctrl+V)로 컴퓨터 클립보드의 글을 기기에 붙여 넣는다. 여러 줄도 줄바꿈 그대로 들어간다
+- Web: 미러링 화면에서도 키보드 입력(한/영)과 ⌘V(Ctrl+V) 붙여넣기를 쓸 수 있다. 휴대폰 브라우저에서 화면을 눌러도 화면 키보드는 뜨지 않는다
+- Android: 블루투스·USB 키보드를 연결하면 그 키보드로 기기에 입력(한/영)하고 Ctrl+V로 붙여 넣는다. 화면 키보드는 띄우지 않고, 키보드를 꽂거나 빼도 미러링이 끊기지 않는다
+
+### 변경
+- Desktop·Android: 무선 기기 추가를 기기 목록 아래 카드가 아니라 별도 화면에서 한다. 기기 선택 화면 오른쪽 위 '+'를 누르면 Desktop은 새 창, Android는 새 화면이 열리고, 페어링·연결 탭으로 나뉜다. 페어링하면 연결 탭으로 넘어가고, 연결하면 화면이 닫힌다. Desktop 창은 ⌘W(Ctrl+W)로도 닫힌다
+- Desktop·Android: 무선 기기 IP 주소는 끝자리만 입력하면(예: 14) 192.168.0.14로 연결한다. 다른 대역은 주소 전체를 입력한다
+
+### 수정
+- Desktop: 미러링 창에 연결된 동안 ⌘C(Ctrl+C) 스크린샷 복사 단축키가 동작하지 않던 문제
+- Desktop: 설정 창이 ⌘W(Ctrl+W)로 닫히지 않던 문제
+
+### 알려진 제한
+- 붙여넣기와 한글 입력은 기기 클립보드를 거치므로 기기 클립보드 내용이 바뀝니다
+- Ctrl·Alt를 함께 누르는 키 조합은 기기로 보내지 않습니다. Android 앱은 화면 키보드로는 입력할 수 없습니다(하드웨어 키보드만)
+- 무선 기기 IP 끝자리 입력은 192.168.0 대역만 채웁니다. 다른 대역은 주소 전체를 입력해야 합니다
+- Web: 쓰기 전에 이 컴퓨터의 adb 서버를 꺼야 합니다(`adb kill-server`). 변환은 가장 최근 녹화만 할 수 있습니다(다음 녹화를 시작하면 지워짐)
+- APK 끌어 놓기 설치는 Desktop만, 분할 APK(.apks·.xapk)는 아직 지원하지 않습니다
+- Android 앱 설치 파일(APK)은 아직 릴리즈에 없습니다(`./gradlew :androidApp:installDebug`)
+- macOS 앱은 Apple 개발자 서명·공증 전이라 처음 열 때 README의 "macOS에서 처음 열기"를 따라야 합니다
+- 1.0 전까지 macOS 패키지 내부 버전은 첫 숫자를 1로 씁니다(이 릴리즈는 1.8.0)
+
 ## [0.7.0] - 2026-10-06
 
 사용 편의 개선 릴리즈입니다. Desktop에서 무선 디버깅으로 기기를 연결하고, 미러링 창에 APK를 끌어 놓아 설치할 수 있습니다. GIF·WebP 변환은 새 창에서 하고 결과를 바로 열 수 있으며, Web에서도 변환할 수 있습니다. 이 릴리즈부터 develop·release 브랜치로 배포합니다.
@@ -137,7 +165,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.4.0...v0.5.0

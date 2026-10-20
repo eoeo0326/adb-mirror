@@ -104,7 +104,8 @@ private fun WebApp(graph: WebAppGraph) {
                     mirror?.let { old -> scope.launch { old.close() } }
                     mirror = MirrorHolder(effect.device, graph)
                 }
-                DeviceListEffect.StartNotificationPairing -> Unit
+                // Web은 무선 기기 추가를 지원하지 않아 오지 않는다.
+                DeviceListEffect.StartNotificationPairing, DeviceListEffect.OpenWirelessAdd, DeviceListEffect.WirelessConnected -> Unit
             }
         }
     }
@@ -118,7 +119,7 @@ private fun WebApp(graph: WebAppGraph) {
             }) { Text("← 기기 목록") }
             // 웹은 결과를 다운로드로 내보내므로 열기 버튼이 없다.
             val conversion = remember(current) { ConversionHost.Overlay(current.conversion, opener = null) }
-            MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize())
+            MirrorRoute(current.viewModel, conversion, Modifier.fillMaxSize(), keyboardInput = true, showSoftKeyboard = false)
         }
         return
     }

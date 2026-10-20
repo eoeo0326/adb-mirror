@@ -11,6 +11,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.Recording
 import io.github.eoeo0326.adbmirror.core.domain.model.SessionEvent
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchEvent
 import io.github.eoeo0326.adbmirror.core.domain.repository.DeviceRepository
 import io.github.eoeo0326.adbmirror.core.domain.repository.MirrorRepository
@@ -44,6 +45,11 @@ class FakeSession(override val serial: String = "S1") : MirrorSession {
     override val events: Flow<SessionEvent> = emptyFlow()
     override val packets: Flow<EncodedPacket> = emptyFlow()
     override suspend fun sendTouch(event: TouchEvent) { touches += event }
+    /** 키·글자를 보낸 순서. `key:Enter`, `text:abc`, `paste:한글` */
+    val inputs = mutableListOf<String>()
+    override suspend fun pressKey(key: DeviceKey) { inputs += "key:$key" }
+    override suspend fun injectText(text: String) { inputs += "text:$text" }
+    override suspend fun pasteText(text: String) { inputs += "paste:$text" }
     var failKeyFrame: String? = null
     override suspend fun requestKeyFrame() {
         log += "keyFrame"

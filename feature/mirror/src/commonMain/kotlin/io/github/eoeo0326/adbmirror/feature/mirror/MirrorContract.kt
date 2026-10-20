@@ -1,6 +1,7 @@
 package io.github.eoeo0326.adbmirror.feature.mirror
 
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.DeviceKey
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
 import io.github.eoeo0326.adbmirror.core.domain.model.TouchAction
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoSize
@@ -49,6 +50,9 @@ sealed interface MirrorIntent {
     data object Connect : MirrorIntent
     data object Disconnect : MirrorIntent
     data class Touch(val action: TouchAction, val x: Int, val y: Int) : MirrorIntent
+    data class Key(val key: DeviceKey) : MirrorIntent
+    /** 친 글자(확정된 것만). [paste]면 클립보드에서 붙여 넣은 글이다. */
+    data class Text(val text: String, val paste: Boolean = false) : MirrorIntent
     data object ToggleViewOnly : MirrorIntent
     data object ToggleTouchEffect : MirrorIntent
     data object ToggleShowTouches : MirrorIntent
