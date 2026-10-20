@@ -10,7 +10,10 @@ import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
 import io.github.eoeo0326.adbmirror.core.domain.model.Recording
 import io.github.eoeo0326.adbmirror.core.domain.model.Screenshot
+import io.github.eoeo0326.adbmirror.core.domain.model.DownloadedUpdate
+import io.github.eoeo0326.adbmirror.core.domain.model.InstallKind
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
+import io.github.eoeo0326.adbmirror.core.domain.model.UpdateInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessEndpoint
 import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import kotlinx.coroutines.flow.Flow
@@ -79,6 +82,23 @@ interface RecordingRepository {
      * 결과는 첫 파일 옆에 같은 이름의 .gif/.webp로 쓴다. 흐름을 취소하면 쓰던 파일을 지운다.
      */
     fun convert(files: List<String>, options: ConversionOptions): Flow<ConversionProgress>
+}
+
+/** 앱 업데이트. 최신 릴리즈를 찾고, 설치 형태에 맞는 파일을 내려받아 설치한다. */
+interface UpdateRepository {
+    val installKind: InstallKind
+
+    /** 최신 릴리즈. 찾지 못하면 예외. */
+    suspend fun latest(): UpdateInfo
+
+    /** 이 설치 형태의 파일을 내려받고 릴리즈의 SHA256SUMS로 확인한다. [onProgress]는 0..1, 크기를 모르면 null. */
+    suspend fun download(info: UpdateInfo, onProgress: (Float?) -> Unit): DownloadedUpdate
+
+    /** 앱이 끝나기를 기다렸다가 교체하고 다시 여는 설치 프로그램을 띄운다. 돌아오면 앱을 종료해야 한다. */
+    suspend fun install(update: DownloadedUpdate)
+
+    /** 직접 설치할 수 없는 형태(Linux 패키지)에서 사용자에게 보여 줄 설치 명령. */
+    fun manualCommand(update: DownloadedUpdate): String
 }
 
 interface SettingsRepository {
