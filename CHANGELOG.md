@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
 ### 추가
 - Desktop: 미러링 창에서 키보드로 기기에 글자를 입력한다. 한/영 전환은 컴퓨터 입력기로 하고, 조합 중인 한글은 창 왼쪽 아래에 보였다가 확정되면 보낸다. Enter·Backspace·Delete·Tab·Esc·방향키·Home/End·PageUp/Down도 보낸다
 - Desktop: ⌘V(Ctrl+V)로 컴퓨터 클립보드의 글을 기기에 붙여 넣는다. 여러 줄도 줄바꿈 그대로 들어간다
@@ -155,7 +157,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.4.0...v0.5.0
