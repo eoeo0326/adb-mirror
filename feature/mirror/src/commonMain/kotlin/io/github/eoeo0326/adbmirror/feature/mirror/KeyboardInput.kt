@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isAltPressed
 import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -81,6 +82,13 @@ internal fun KeyboardInput(
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     if (event.isMetaPressed || event.isCtrlPressed) {
+                        // 입력란은 ⌘C를 복사 명령으로 처리하고 이벤트를 소비해 메뉴의 "스크린샷 복사"까지 가지 않는다.
+                        // 그래서 여기서 직접 실행한다. 다른 메뉴 단축키(⌘S·R·W 등)는 입력란이 처리하지 않아 메뉴로 간다.
+                        if (event.key == Key.C && !event.isShiftPressed && !event.isAltPressed) {
+                            pasting = false
+                            onIntent(MirrorIntent.CopyScreenshot)
+                            return@onPreviewKeyEvent true
+                        }
                         pasting = event.key == Key.V
                         return@onPreviewKeyEvent false // 붙여넣기는 입력란이 받게 둔다
                     }

@@ -206,7 +206,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                 LaunchedEffect(holder) {
                     holder.viewModel.effects.collect { if (it is ConversionEffect.Closed) closeWindow() }
                 }
-                ConversionMenuBar(onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
+                WindowMenuBar(onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
                 AppTheme { ConversionRoute(holder.viewModel, DesktopFileOpener) }
             }
         }
@@ -216,6 +216,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
         Window(onCloseRequest = { settingsOpen = false }, title = "ADB Mirror 설정", state = rememberWindowState(size = DpSize(460.dp, 700.dp))) {
             val focus by settingsFocus
             LaunchedEffect(focus) { window.toFront() }
+            WindowMenuBar(onCloseWindow = { settingsOpen = false }, onOpenSettings = openSettings, onQuit = quit)
             AppTheme { SettingsRoute(settingsViewModel, platform) }
         }
     }
