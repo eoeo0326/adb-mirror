@@ -9,6 +9,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.WirelessService
 import io.github.eoeo0326.adbmirror.core.domain.repository.WirelessDeviceRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.ConnectWirelessDeviceUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.PairDeviceUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.WirelessInput
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +31,27 @@ class WirelessUseCaseTest {
         val device = ConnectWirelessDeviceUseCase(repo)("192.168.0.5", "40555")
         assertEquals(listOf("pair 192.168.0.5 37123 123456", "connect 192.168.0.5 40555"), calls)
         assertEquals("192.168.0.5:40555", device.serial)
+    }
+
+    @Test
+    fun lastOctetOnlyUsesDefaultSubnetAndFullAddressIsKept() = runTest {
+        PairDeviceUseCase(repo)("14", "37123", "123456")
+        ConnectWirelessDeviceUseCase(repo)(" 14 ", "40555")
+        ConnectWirelessDeviceUseCase(repo)("127.0.0.14", "40555")
+        ConnectWirelessDeviceUseCase(repo)("007", "40555")
+        assertEquals(
+            listOf("pair 192.168.0.14 37123 123456", "connect 192.168.0.14 40555", "connect 127.0.0.14 40555", "connect 192.168.0.7 40555"),
+            calls,
+        )
+    }
+
+    @Test
+    fun lastOctetOutOfRangeIsRejected() = runTest {
+        assertEquals("끝자리는 0~255 숫자입니다", WirelessInput.hostProblem("300"))
+        assertEquals("주소를 입력하세요", WirelessInput.hostProblem("  "))
+        assertNull(WirelessInput.hostProblem("255"))
+        assertFailsWith<IllegalArgumentException> { ConnectWirelessDeviceUseCase(repo)("300", "40555") }
+        assertEquals(emptyList(), calls)
     }
 
     @Test
