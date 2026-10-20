@@ -25,6 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.github.eoeo0326.adbmirror.core.domain.model.Settings
+import io.github.eoeo0326.adbmirror.feature.update.UpdateIntent
+import io.github.eoeo0326.adbmirror.feature.update.UpdateState
+import io.github.eoeo0326.adbmirror.feature.update.UpdateStatusRow
+import io.github.eoeo0326.adbmirror.feature.update.UpdateViewModel
 
 /** 플랫폼이 채워 주는 부분. 고르기 창이 없는 플랫폼은 null로 두면 버튼을 숨긴다. */
 class SettingsPlatform(
@@ -35,15 +39,24 @@ class SettingsPlatform(
     val pickAdb: (() -> String?)? = null,
 )
 
+/** [update]가 있으면(Desktop) 업데이트 섹션을 보인다. */
 @Composable
-fun SettingsRoute(viewModel: SettingsViewModel, platform: SettingsPlatform, modifier: Modifier = Modifier) {
+fun SettingsRoute(viewModel: SettingsViewModel, platform: SettingsPlatform, modifier: Modifier = Modifier, update: UpdateViewModel? = null) {
     val settings by viewModel.state.collectAsState()
-    SettingsScreen(settings, platform, viewModel::onIntent, modifier)
+    val updateState = update?.state?.collectAsState()?.value
+    SettingsScreen(settings, platform, viewModel::onIntent, modifier, updateState, update?.let { it::onIntent })
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SettingsScreen(settings: Settings, platform: SettingsPlatform, onIntent: (SettingsIntent) -> Unit, modifier: Modifier = Modifier) {
+fun SettingsScreen(
+    settings: Settings,
+    platform: SettingsPlatform,
+    onIntent: (SettingsIntent) -> Unit,
+    modifier: Modifier = Modifier,
+    update: UpdateState? = null,
+    onUpdateIntent: ((UpdateIntent) -> Unit)? = null,
+) {
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -84,6 +97,17 @@ fun SettingsScreen(settings: Settings, platform: SettingsPlatform, onIntent: (Se
             reset = if (settings.adbPath != null) ({ onIntent(SettingsIntent.SetAdbPath(null)) }) else null,
             resetLabel = "자동",
         )
+
+        if (update != null && onUpdateIntent != null) {
+            Section("업데이트", "현재 버전 ${update.current}")
+            Toggle("자동으로 업데이트 확인·내려받기", settings.autoUpdate) { onIntent(SettingsIntent.ToggleAutoUpdate) }
+            Text(
+                "켜 두면 앱을 켤 때 새 버전을 확인해 내려받고, 설치할지 묻습니다.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            UpdateStatusRow(update, onUpdateIntent)
+        }
 
         HorizontalDivider()
         Text(platform.storageDescription, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
