@@ -132,6 +132,20 @@ class UpdateDataTest {
     }
 
     @Test
+    fun powershellScriptIsWrittenWithBomSoKoreanPathsSurvive() = runTest {
+        val launched = mutableListOf<List<String>>()
+        val home = File(dir, "사용자/ADB Mirror")
+        val msi = UpdateTarget(InstallKind.WindowsMsi, "x64", null, File(home, "ADB Mirror.exe"))
+        val file = File(dir, "ADB-Mirror-0.8.0-windows-x64.msi").apply { writeText("x") }
+        GitHubUpdateRepository(msi, dir, http = FakeHttp(emptyMap()), pid = 5, launch = { cmd, _ -> launched += cmd })
+            .install(io.github.eoeo0326.adbmirror.core.domain.model.DownloadedUpdate(info, file.path))
+        val bytes = File(dir, "update.ps1").readBytes()
+        assertEquals(listOf(0xEF, 0xBB, 0xBF), bytes.take(3).map { it.toInt() and 0xFF }, "UTF-8 BOM")
+        assertTrue("사용자" in String(bytes, Charsets.UTF_8))
+        assertEquals("powershell.exe", launched.single().first())
+    }
+
+    @Test
     fun installWritesScriptAndLaunchesIt() = runTest {
         val launched = mutableListOf<List<String>>()
         val linux = UpdateTarget(InstallKind.LinuxPortable, "x64", File(dir, "ADB Mirror"), File(dir, "ADB Mirror/bin/ADB Mirror"))

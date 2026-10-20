@@ -158,7 +158,8 @@ class GitHubUpdateRepository(
 
     private fun run(name: String, script: String, shell: List<String>) {
         val file = File(dir, name)
-        file.writeText(script)
+        // Windows PowerShell 5.1은 BOM 없는 스크립트를 시스템 코드페이지(예: cp949)로 읽어 한글 경로가 깨진다.
+        if (name.endsWith(".ps1")) file.writeText("\uFEFF" + script, Charsets.UTF_8) else file.writeText(script, Charsets.UTF_8)
         launch(shell + file.path, File(dir, "update.log"))
     }
 
