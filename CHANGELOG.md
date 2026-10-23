@@ -4,9 +4,21 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-23
+
+Desktop 앱 업데이트 릴리즈입니다. 설정에서 새 버전을 확인하고, 앱이 직접 내려받아 설치합니다. 0.8.0 이하에는 이 기능이 없어 0.8.1은 Releases에서 직접 받아 설치해야 하고, 그다음 버전부터 앱 안에서 업데이트할 수 있습니다.
+
 ### 추가
 - Desktop: 설정에 업데이트 섹션을 둔다. 현재 버전을 보고 [지금 확인]으로 새 버전을 찾는다. "자동으로 업데이트 확인·내려받기"(기본 켬)를 켜 두면 앱을 켤 때 새 버전을 내려받고, 기기 목록 창 위의 "다시 시작해 업데이트"를 누르면 앱을 다시 시작하며 설치한다
 - Desktop: 내려받은 업데이트는 릴리즈의 SHA256SUMS로 확인한다. macOS 앱·Windows msi·포터블은 앱이 직접 교체하고, Linux deb·rpm은 내려받은 뒤 설치 명령을 안내한다
+
+### 알려진 제한
+- 0.8.0 이하에서는 앱 안에서 0.8.1로 업데이트할 수 없습니다. 이번 한 번은 Releases에서 직접 받아 설치해 주세요
+- 앱 안 업데이트는 Desktop만 됩니다. Linux deb·rpm 설치본은 관리자 권한이 필요해 설치 명령만 안내합니다
+- 한글 입력과 붙여넣기는 기기 클립보드를 거치므로 기기 클립보드 내용이 바뀝니다
+- Web: 쓰기 전에 이 컴퓨터의 adb 서버를 꺼야 합니다(`adb kill-server`)
+- Android 앱 설치 파일(APK)은 아직 릴리즈에 없습니다(`./gradlew :androidApp:installDebug`)
+- macOS 앱은 Apple 개발자 서명·공증 전입니다. 1.0 전까지 macOS 패키지 내부 버전은 첫 숫자를 1로 씁니다(이 릴리즈는 1.8.1)
 
 ## [0.8.0] - 2026-10-20
 
@@ -169,7 +181,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...v0.6.0
