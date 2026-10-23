@@ -13,6 +13,8 @@ data class Settings(
     val outputDir: String? = null,
     /** adb 실행 파일. null이면 PATH·ANDROID_HOME·기본 SDK 위치에서 찾는다. */
     val adbPath: String? = null,
+    /** 앱을 켤 때 새 버전을 확인하고 내려받는다(설치는 묻는다). Desktop만 쓴다. */
+    val autoUpdate: Boolean = true,
 ) {
     /** 저장 파일을 손으로 고쳤거나 옛 값이 남아 있어도 서버가 받을 수 있는 값으로 맞춘다. */
     fun sanitized(): Settings {

@@ -30,6 +30,7 @@ import io.github.eoeo0326.adbmirror.core.adb.AdbBinaryTransport
 import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.settings.PropertiesSettingsRepository
 import io.github.eoeo0326.adbmirror.core.data.settings.SettingsLocation
+import io.github.eoeo0326.adbmirror.core.domain.model.AppVersion
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.feature.conversion.ConversionEffect
 import io.github.eoeo0326.adbmirror.feature.conversion.ConversionRoute
@@ -43,6 +44,9 @@ import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorRoute
 import io.github.eoeo0326.adbmirror.feature.settings.SettingsPlatform
 import io.github.eoeo0326.adbmirror.feature.settings.SettingsRoute
+import io.github.eoeo0326.adbmirror.feature.update.UpdateBanner
+import io.github.eoeo0326.adbmirror.feature.update.UpdateEffect
+import io.github.eoeo0326.adbmirror.feature.update.UpdateIntent
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
@@ -51,6 +55,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import java.awt.Desktop
 import java.io.File
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 
 /** 열려 있는 미러링 창(serial → 창). */
@@ -80,7 +85,7 @@ fun main() {
     val location = SettingsLocation.resolve()
     val settings = PropertiesSettingsRepository(location.settingsFile)
     val transport = AdbBinaryTransport.locate(settings.settings.value.adbPath)
-    val graph = transport?.let { AppGraph(it, settings, location.dir) }
+    val graph = transport?.let { AppGraph(it, settings, location.dir, readAppVersion()) }
     val platform = SettingsPlatform(
         storageDescription = "설정 파일: ${location.settingsFile.path}" + if (location.portable) " (포터블)" else "",
         defaultOutputDescription = "기본 위치(${DesktopScreenshotSink().defaultDir().path})",
@@ -102,6 +107,7 @@ fun main() {
 private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatform, windowBounds: WindowBoundsStore) {
     val listViewModel = remember { graph.deviceListViewModel() }
     val settingsViewModel = remember { graph.settingsViewModel() }
+    val updateViewModel = remember { graph.updateViewModel() }
     var settingsOpen by remember { mutableStateOf(false) }
     val settingsFocus = remember { mutableIntStateOf(0) }
     val openSettings: () -> Unit = {
@@ -165,11 +171,32 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
         }
     }
 
+    // 업데이트: 설치 프로그램을 띄웠으면 창·세션을 정리하고 끝내야 설치가 시작된다.
+    LaunchedEffect(Unit) {
+        updateViewModel.effects.collect { effect ->
+            when (effect) {
+                UpdateEffect.Quit -> quit()
+                is UpdateEffect.OpenUrl -> runCatching { Desktop.getDesktop().browse(URI(effect.url)) }
+                is UpdateEffect.OpenFile -> runCatching { Desktop.getDesktop().open(File(effect.path)) }
+            }
+        }
+    }
+    val checkUpdate: () -> Unit = {
+        updateViewModel.onIntent(UpdateIntent.Check)
+        openSettings()
+    }
+
     val listWindowState = remember { restoredWindowState(windowBounds, "list", DpSize(420.dp, 560.dp), rememberSize = true) }
     Window(onCloseRequest = quit, title = "ADB Mirror", state = listWindowState) {
         RememberWindowBounds(listWindowState, windowBounds, "list", rememberSize = true)
-        DeviceListMenuBar(onOpenSettings = openSettings, onQuit = quit)
-        AppTheme { DeviceListRoute(listViewModel) }
+        DeviceListMenuBar(onOpenSettings = openSettings, onCheckUpdate = checkUpdate, onQuit = quit)
+        val updateState by updateViewModel.state.collectAsState()
+        AppTheme {
+            Column(Modifier.fillMaxSize()) {
+                UpdateBanner(updateState, mirrorsOpen = openWindows.isNotEmpty(), onIntent = updateViewModel::onIntent)
+                DeviceListRoute(listViewModel, Modifier.weight(1f))
+            }
+        }
     }
 
     for ((serial, holder) in openWindows) {
@@ -234,7 +261,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
             val focus by settingsFocus
             LaunchedEffect(focus) { window.toFront() }
             WindowMenuBar(onCloseWindow = { settingsOpen = false }, onOpenSettings = openSettings, onQuit = quit)
-            AppTheme { SettingsRoute(settingsViewModel, platform) }
+            AppTheme { SettingsRoute(settingsViewModel, platform, update = updateViewModel) }
         }
     }
 }
@@ -278,4 +305,12 @@ private fun ApplicationScope.AdbMissingWindow(settings: SettingsRepository) {
             }
         }
     }
+}
+
+/** 빌드가 넣어 준 `app-version.properties`(composeApp `writeAppVersion`)에서 버전을 읽는다. */
+private fun readAppVersion(): AppVersion {
+    val text = Thread.currentThread().contextClassLoader
+        ?.getResourceAsStream("io/github/eoeo0326/adbmirror/app-version.properties")
+        ?.use { input -> java.util.Properties().apply { load(input) }.getProperty("version") }
+    return text?.let(AppVersion::parse) ?: AppVersion(0, 0, 0)
 }

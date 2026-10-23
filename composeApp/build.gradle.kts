@@ -55,6 +55,24 @@ val macPackageVersion: String = appVersion.split('.').let { (major, minor, patch
     if (major == "0") "1.$minor.$patch" else appVersion
 }
 
+/** 앱이 실행 중에 자기 버전을 알도록 `appVersion`을 리소스로 싣는다(업데이트 확인용). macOS Info.plist는 1.x라 쓸 수 없다. */
+abstract class WriteAppVersion : DefaultTask() {
+    @get:Input abstract val version: Property<String>
+    @get:OutputDirectory abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun write() {
+        val dir = outputDir.get().asFile.resolve("io/github/eoeo0326/adbmirror").apply { mkdirs() }
+        dir.resolve("app-version.properties").writeText("version=${version.get()}\n")
+    }
+}
+
+val writeAppVersion = tasks.register<WriteAppVersion>("writeAppVersion") {
+    version = appVersion
+    outputDir = layout.buildDirectory.dir("generated/app-version")
+}
+kotlin.sourceSets.getByName("desktopMain").resources.srcDir(writeAppVersion)
+
 compose.desktop {
     application {
         mainClass = "io.github.eoeo0326.adbmirror.MainKt"
@@ -68,7 +86,8 @@ compose.desktop {
             copyright = "Copyright 2026 eoeo0326. Apache License 2.0."
             // licenseFile은 두지 않는다. 넣으면 dmg를 열 때마다 동의 창이 뜬다(Apache-2.0은 동의가 필요 없음).
             // suggestRuntimeModules 결과. JavaCPP(FFmpeg)가 jdk.unsupported를 쓴다.
-            modules("java.instrument", "java.management", "jdk.unsupported")
+            // jdk.crypto.ec: 업데이트 확인·내려받기의 HTTPS(GitHub ECDSA 인증서)에 필요하다(JDK 21).
+            modules("java.instrument", "java.management", "jdk.unsupported", "jdk.crypto.ec")
 
             macOS {
                 bundleID = "io.github.eoeo0326.adbmirror"
