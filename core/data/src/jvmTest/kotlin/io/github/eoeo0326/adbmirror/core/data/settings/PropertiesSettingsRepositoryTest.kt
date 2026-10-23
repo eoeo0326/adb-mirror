@@ -22,10 +22,10 @@ class PropertiesSettingsRepositoryTest {
     @Test
     fun updatePersistsAndReloads() = runTest {
         val repo = PropertiesSettingsRepository(file)
-        repo.update { it.copy(maxSize = 1920, maxFps = 30, viewOnly = true, touchEffect = false, showTouches = true, outputDir = "/사진/샷 폴더", adbPath = "C:\\sdk\\adb.exe") }
+        repo.update { it.copy(maxSize = 1920, maxFps = 30, viewOnly = true, touchEffect = false, showTouches = true, outputDir = "/사진/샷 폴더", adbPath = "C:\\sdk\\adb.exe", autoUpdate = false) }
         assertTrue(file.isFile)
         val reloaded = PropertiesSettingsRepository(file).settings.value
-        assertEquals(Settings(1920, 30, viewOnly = true, touchEffect = false, showTouches = true, outputDir = "/사진/샷 폴더", adbPath = "C:\\sdk\\adb.exe"), reloaded)
+        assertEquals(Settings(1920, 30, viewOnly = true, touchEffect = false, showTouches = true, outputDir = "/사진/샷 폴더", adbPath = "C:\\sdk\\adb.exe", autoUpdate = false), reloaded)
         assertEquals(listOf("settings.properties"), file.parentFile.list()!!.toList(), "임시 파일이 남지 않는다")
     }
 

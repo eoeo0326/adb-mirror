@@ -12,7 +12,15 @@ import io.github.eoeo0326.adbmirror.core.data.screenshot.DesktopScreenshotSink
 import io.github.eoeo0326.adbmirror.core.data.screenshot.ScreenshotRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.storage.FileTextStore
 import io.github.eoeo0326.adbmirror.core.data.scrcpy.ScrcpyServerLauncher
+import io.github.eoeo0326.adbmirror.core.data.update.GitHubUpdateRepository
+import io.github.eoeo0326.adbmirror.core.data.update.UpdateTarget
+import io.github.eoeo0326.adbmirror.core.domain.model.AppVersion
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.usecase.CheckForUpdateUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.DownloadUpdateUseCase
+import io.github.eoeo0326.adbmirror.core.domain.usecase.InstallUpdateUseCase
+import io.github.eoeo0326.adbmirror.feature.update.UpdateActions
+import io.github.eoeo0326.adbmirror.feature.update.UpdateViewModel
 import io.github.eoeo0326.adbmirror.core.domain.repository.SettingsRepository
 import io.github.eoeo0326.adbmirror.core.domain.usecase.CaptureScreenshotUseCase
 import io.github.eoeo0326.adbmirror.core.domain.usecase.ConnectWirelessDeviceUseCase
@@ -47,7 +55,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.withContext
 
 /** 수동 DI. 화면·UseCase가 더 늘면 Koin으로 옮긴다. */
-class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepository, dataDir: java.io.File) {
+class AppGraph(
+    transport: AdbBinaryTransport,
+    private val settings: SettingsRepository,
+    dataDir: java.io.File,
+    private val appVersion: AppVersion,
+) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val devices = DeviceRepositoryImpl(transport)
     private val apps = ApkInstaller(transport) { path -> withContext(Dispatchers.IO) { java.io.File(path).readBytes() } }
@@ -56,6 +69,20 @@ class AppGraph(transport: AdbBinaryTransport, private val settings: SettingsRepo
     private val recordings = FileRecordingRepository(scope)
     private val launched = LaunchedServers(FileTextStore(java.io.File(dataDir, "launched-servers.txt")))
     private val mirror = MirrorRepositoryImpl(ScrcpyServerLauncher(transport, ClasspathServerJarSource, log = ::println, launched = launched), scope)
+
+    private val updates = GitHubUpdateRepository(UpdateTarget.detect(), java.io.File(dataDir, "updates"))
+
+    fun updateViewModel() = UpdateViewModel(
+        UpdateActions(
+            current = appVersion,
+            kind = updates.installKind,
+            check = CheckForUpdateUseCase(updates, appVersion),
+            download = DownloadUpdateUseCase(updates),
+            install = InstallUpdateUseCase(updates),
+            manualCommand = updates::manualCommand,
+        ),
+        GetSettingsUseCase(settings),
+    )
 
     fun settingsViewModel() = SettingsViewModel(GetSettingsUseCase(settings), UpdateSettingsUseCase(settings))
 

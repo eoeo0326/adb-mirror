@@ -51,5 +51,6 @@ class SettingsViewModelTest {
         val s = Settings()
         assertEquals(!s.viewOnly, SettingsViewModel.reduce(s, SettingsIntent.ToggleViewOnly).viewOnly)
         assertEquals(!s.showTouches, SettingsViewModel.reduce(s, SettingsIntent.ToggleShowTouches).showTouches)
+        assertEquals(!s.autoUpdate, SettingsViewModel.reduce(s, SettingsIntent.ToggleAutoUpdate).autoUpdate)
     }
 }
