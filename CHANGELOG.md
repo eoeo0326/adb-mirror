@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-23
+
 ### 추가
 - Desktop: 설정에 업데이트 섹션을 둔다. 현재 버전을 보고 [지금 확인]으로 새 버전을 찾는다. "자동으로 업데이트 확인·내려받기"(기본 켬)를 켜 두면 앱을 켤 때 새 버전을 내려받고, 기기 목록 창 위의 "다시 시작해 업데이트"를 누르면 앱을 다시 시작하며 설치한다
 - Desktop: 내려받은 업데이트는 릴리즈의 SHA256SUMS로 확인한다. macOS 앱·Windows msi·포터블은 앱이 직접 교체하고, Linux deb·rpm은 내려받은 뒤 설치 명령을 안내한다
@@ -169,7 +171,8 @@ macOS용 Swift 프로토타입 첫 릴리즈입니다.
 - `--stats` 표시 fps 출력
 - 실행 스크립트 `run.sh`, `ADB Mirror.command`
 
-[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/eoeo0326/adb-mirror/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/eoeo0326/adb-mirror/compare/v0.5.0...v0.6.0
