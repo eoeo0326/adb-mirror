@@ -70,10 +70,14 @@ class ComposeInspectorResolver(
 
     companion object {
         const val JAR_NAME = "compose-ui-inspection.jar"
+        const val MIN_VERSION = "1.0.0"
         private const val MAVEN = "https://dl.google.com/android/maven2"
 
-        /** 버전을 묻는 대상. 버전을 비워 보내면 앱에 있는 버전이 응답에 담긴다. */
-        fun compatibilityTarget(version: String = ""): LibraryCompatibility = LibraryCompatibility.newBuilder()
+        /**
+         * 버전을 묻는 대상. 응답의 `version`에 앱이 쓰는 버전이 담긴다. 버전을 비우면 `SERVICE_ERROR`
+         * ("Failed to parse provided min version")가 되므로 최소 버전을 채워 보낸다.
+         */
+        fun compatibilityTarget(version: String = MIN_VERSION): LibraryCompatibility = LibraryCompatibility.newBuilder()
             .setCoordinate(ArtifactCoordinate.newBuilder().setGroupId("androidx.compose.ui").setArtifactId("ui").setVersion(version))
             .addExpectedLibraryClassNames("androidx.compose.ui.Modifier")
             .build()
