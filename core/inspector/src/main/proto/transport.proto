@@ -1,0 +1,76 @@
+// Android Studio transport (AOSP tools/base/transport/proto, Apache-2.0)에서 필요한 필드만 같은 번호로 옮겼다.
+syntax = "proto3";
+package profiler.proto;
+option java_package = "io.github.eoeo0326.adbmirror.core.inspector.proto";
+import "app_inspection.proto";
+
+message CommonConfig {
+  enum SocketType { UNSPECIFIED_SOCKET = 0; ABSTRACT_SOCKET = 1; }
+  SocketType socket_type = 1;
+  string service_address = 2;
+  string service_socket_name = 3;
+}
+message DaemonConfig { CommonConfig common = 1; }
+message AgentConfig { CommonConfig common = 1; }
+
+message Device {
+  int64 device_id = 1; string manufacturer = 2; string model = 3; string serial = 4;
+  string version = 5; int32 api_level = 6; string cpu_abi = 14;
+  enum State { UNSPECIFIED = 0; ONLINE = 1; OFFLINE = 2; DISCONNECTED = 3; }
+  State state = 15; string unsupported_reason = 16;
+}
+message Process {
+  enum State { UNSPECIFIED = 0; ALIVE = 1; DEAD = 2; }
+  enum ExposureLevel { UNKNOWN = 0; RELEASE = 1; PROFILEABLE = 2; DEBUGGABLE = 3; }
+  string name = 1; int32 pid = 2; int64 device_id = 3; State state = 4;
+  int64 start_timestamp_ns = 5; string abi_cpu_arch = 6; ExposureLevel exposure_level = 7;
+  string package_name = 8; int32 uid = 9;
+}
+message AgentData { enum Status { UNSPECIFIED = 0; ATTACHED = 1; UNATTACHABLE = 2; } Status status = 1; }
+message ProcessData { message ProcessStarted { Process process = 1; } oneof union { ProcessStarted process_started = 1; } }
+
+message AttachAgent {
+  string agent_lib_file_name = 1; string agent_config_path = 2;
+  string package_name = 3; int32 attach_timeout_ms = 4;
+}
+message Command {
+  enum CommandType { UNSPECIFIED = 0; ATTACH_AGENT = 10; APP_INSPECTION = 1200; }
+  int64 stream_id = 1; CommandType type = 2; int32 pid = 3; int32 command_id = 4;
+  oneof union {
+    AttachAgent attach_agent = 10;
+    app_inspection.AppInspectionCommand app_inspection_command = 1200;
+  }
+}
+message Event {
+  enum Kind { NONE = 0; STREAM = 1; PROCESS = 2; AGENT = 3;
+    APP_INSPECTION_EVENT = 1201; APP_INSPECTION_RESPONSE = 1202; APP_INSPECTION_PAYLOAD = 1203; }
+  int32 pid = 1; int64 group_id = 2; Kind kind = 3; int64 timestamp = 4;
+  bool is_ended = 5; int32 command_id = 6;
+  oneof union {
+    ProcessData process = 11;
+    AgentData agent_data = 12;
+    app_inspection.AppInspectionEvent app_inspection_event = 1201;
+    app_inspection.AppInspectionResponse app_inspection_response = 1202;
+    app_inspection.AppInspectionPayload app_inspection_payload = 1203;
+  }
+}
+
+message VersionRequest { int64 stream_id = 1; }
+message VersionResponse { string version = 1; }
+message GetDevicesRequest {}
+message GetDevicesResponse { repeated Device device = 1; }
+message GetProcessesRequest { int64 device_id = 1; }
+message GetProcessesResponse { repeated Process process = 2; }
+message ExecuteRequest { Command command = 1; }
+message AgentStatusRequest { int64 device_id = 1; int32 pid = 2; string package_name = 3; }
+message ExecuteResponse { int32 command_id = 1; }
+message GetEventsRequest {}
+
+service TransportService {
+  rpc GetVersion(VersionRequest) returns (VersionResponse);
+  rpc GetDevices(GetDevicesRequest) returns (GetDevicesResponse);
+  rpc GetProcesses(GetProcessesRequest) returns (GetProcessesResponse);
+  rpc GetAgentStatus(AgentStatusRequest) returns (AgentData);
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  rpc GetEvents(GetEventsRequest) returns (stream Event);
+}

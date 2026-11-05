@@ -18,6 +18,15 @@ WebP frames are encoded with libwebp (https://chromium.googlesource.com/webm/lib
 Copyright (c) 2010 Google Inc., licensed under the BSD 3-Clause License, as included
 in the JavaCPP FFmpeg build.
 
+The desktop Layout Inspector uses protocol definitions (core/inspector/src/main/proto) derived from
+the Android Open Source Project (tools/base transport, app-inspection and dynamic-layout-inspector,
+https://android.googlesource.com/platform/tools/base) and AndroidX (compose/ui/ui-inspection,
+https://android.googlesource.com/platform/frameworks/support), Copyright The Android Open Source Project,
+licensed under the Apache License, Version 2.0. The device-side transport daemon, agent and inspectors
+are not included; they are read from the user's own Android Studio installation.
+Protocol Buffers (https://github.com/protocolbuffers/protobuf) is licensed under the BSD 3-Clause License,
+and gRPC Java/Kotlin (https://github.com/grpc) under the Apache License, Version 2.0.
+
 The Android application uses the following libraries:
 - Kadb (https://github.com/flyfishxu/Kadb), licensed under the Apache License, Version 2.0,
   derived from dadb (https://github.com/mobile-dev-inc/dadb) by mobile.dev inc.

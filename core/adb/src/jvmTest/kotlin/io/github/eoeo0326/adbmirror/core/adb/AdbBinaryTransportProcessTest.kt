@@ -73,4 +73,29 @@ class AdbBinaryTransportProcessTest {
         assertEquals(listOf(AdbDevice("R3CM90LKDDJ", "device")), list)
         assertEquals(listOf("start-server", "track-devices"), File(dir, "calls").readLines())
     }
+
+    @Test
+    fun forwardParsesPortAndRemovesItOnce() = runBlocking {
+        if (!posix) return@runBlocking
+        // 인자 전체를 args 파일에 남기고, forward tcp:0이면 adb처럼 고른 포트를 출력한다.
+        val (transport, dir) = fakeAdb(
+            "echo \"\$*\" >> \"\$(dirname \"\$0\")/args\"\n" +
+                "case \"\$*\" in *'forward tcp:0'*) echo 41234 ;; esac",
+        )
+        val forward = transport.forward("S1", "AndroidStudioTransport")
+        assertEquals(41234, forward.port)
+        forward.close()
+        assertEquals(
+            listOf("-s S1 forward tcp:0 localabstract:AndroidStudioTransport", "-s S1 forward --remove tcp:41234"),
+            File(dir, "args").readLines(),
+        )
+    }
+
+    @Test
+    fun forwardFailsOnUnparsablePort() = runBlocking {
+        if (!posix) return@runBlocking
+        val (transport, _) = fakeAdb("echo nope")
+        assertFailsWith<AdbException> { transport.forward("S1", "x") }
+        Unit
+    }
 }
