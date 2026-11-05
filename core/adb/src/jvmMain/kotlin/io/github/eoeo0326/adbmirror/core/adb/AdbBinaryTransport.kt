@@ -21,6 +21,11 @@ import java.net.Socket
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
+/** 로컬 [port]에서 기기 소켓으로 이어진 `adb forward` 하나. [close]는 여러 번 불러도 된다. */
+class PortForward(val port: Int, private val remove: suspend () -> Unit) {
+    suspend fun close() = remove()
+}
+
 /** adb 실행 파일을 `ProcessBuilder`로 호출하는 Desktop 전송. 무선 디버깅은 `adb pair`·`adb connect`로 붙는다. */
 class AdbBinaryTransport(private val adb: File) : WirelessAdbTransport {
 
@@ -93,23 +98,30 @@ class AdbBinaryTransport(private val adb: File) : WirelessAdbTransport {
         }
     }
 
-    override suspend fun openLocalAbstract(serial: String, name: String): DeviceStream {
+    /**
+     * `adb forward tcp:0 localabstract:<name>`으로 빈 로컬 포트를 열어 기기 소켓에 잇는다(Desktop 전용).
+     * 정리는 [PortForward.close]이고, 취소 중에도 forward가 남지 않도록 NonCancellable로 돈다.
+     */
+    suspend fun forward(serial: String, localAbstract: String): PortForward {
         // tcp:0을 주면 adb가 빈 로컬 포트를 골라 출력한다.
-        val port = text(run(listOf("-s", serial, "forward", "tcp:0", "localabstract:$name"))).trim().toIntOrNull()
+        val port = text(run(listOf("-s", serial, "forward", "tcp:0", "localabstract:$localAbstract"))).trim().toIntOrNull()
             ?: throw AdbException("adb forward 포트를 해석하지 못했습니다")
-        // 취소 중에도 forward가 남지 않도록 정리는 NonCancellable로 돈다.
-        val removeForward: suspend () -> Unit = {
+        return PortForward(port) {
             withContext(NonCancellable) { runCatching { run(listOf("-s", serial, "forward", "--remove", "tcp:$port")) } }
         }
+    }
+
+    override suspend fun openLocalAbstract(serial: String, name: String): DeviceStream {
+        val forward = forward(serial, name)
         val socket = try {
             withContext(Dispatchers.IO) {
                 Socket().apply {
                     tcpNoDelay = true
-                    connect(InetSocketAddress("127.0.0.1", port), 2_000)
+                    connect(InetSocketAddress("127.0.0.1", forward.port), 2_000)
                 }
             }
         } catch (e: Exception) {
-            removeForward()
+            forward.close()
             throw e
         }
         return DeviceStream(
@@ -117,7 +129,7 @@ class AdbBinaryTransport(private val adb: File) : WirelessAdbTransport {
             sink = SocketSink(socket.getOutputStream()),
             onClose = {
                 withContext(NonCancellable + Dispatchers.IO) { runCatching { socket.close() } }
-                removeForward()
+                forward.close()
             },
         )
     }
