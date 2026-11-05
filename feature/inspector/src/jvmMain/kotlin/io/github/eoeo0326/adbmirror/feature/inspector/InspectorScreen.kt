@@ -5,7 +5,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +18,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -46,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -54,7 +59,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
@@ -79,6 +83,7 @@ import java.awt.Cursor
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 @Composable
 fun InspectorRoute(viewModel: InspectorViewModel, modifier: Modifier = Modifier) {
@@ -278,6 +283,7 @@ private fun Splitter(onDrag: (Dp) -> Unit) {
 }
 
 private val COUNT_WIDTH = 52.dp
+private val INDENT = 12.dp
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -290,7 +296,18 @@ private fun ComponentTree(state: InspectorState, onIntent: (InspectorIntent) -> 
         if (index >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.animateScrollToItem(index)
     }
     val showCounts = state.showRecompositionColumns && state.composeAvailable
-    Column(modifier) {
+    // 깊은 트리는 이름이 잘리지 않게 이름 영역만 가로로 민다(Recomp·Skip 열은 고정).
+    val density = LocalDensity.current
+    var hOffset by remember { mutableFloatStateOf(0f) }
+    val maxOffset = with(density) { ((rows.maxOfOrNull { it.depth } ?: 0) * INDENT.value).dp.toPx() }
+    LaunchedEffect(state.selectedNodeId) {
+        val depth = rows.firstOrNull { it.node.id == state.selectedNodeId }?.depth ?: return@LaunchedEffect
+        hOffset = with(density) { ((depth - 2).coerceAtLeast(0) * INDENT.value).dp.toPx() }
+    }
+    Column(modifier.onPointerEvent(PointerEventType.Scroll) { e ->
+        val dx = e.changes.firstOrNull()?.scrollDelta?.x ?: 0f
+        if (dx != 0f) hOffset = (hOffset + dx * 40f).coerceIn(0f, maxOffset)
+    }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text("이름", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
             if (showCounts) {
@@ -303,6 +320,7 @@ private fun ComponentTree(state: InspectorState, onIntent: (InspectorIntent) -> 
             items(rows, key = { it.node.rootId.toString() + ":" + it.node.id }) { row ->
                 TreeRowItem(
                     row = row,
+                    hOffset = hOffset,
                     selected = row.node.id == state.selectedNodeId,
                     hovered = row.node.id == state.hoveredNodeId,
                     highlightedAt = state.recentlyRecomposed[row.node.id],
@@ -316,7 +334,7 @@ private fun ComponentTree(state: InspectorState, onIntent: (InspectorIntent) -> 
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun TreeRowItem(row: TreeRow, selected: Boolean, hovered: Boolean, highlightedAt: Long?, showCounts: Boolean, onIntent: (InspectorIntent) -> Unit) {
+private fun TreeRowItem(row: TreeRow, hOffset: Float, selected: Boolean, hovered: Boolean, highlightedAt: Long?, showCounts: Boolean, onIntent: (InspectorIntent) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val node = row.node
     // Recomposition이 늘어난 행은 배경을 칠했다가 1초 동안 지운다.
@@ -339,19 +357,26 @@ private fun TreeRowItem(row: TreeRow, selected: Boolean, hovered: Boolean, highl
             .clickable { onIntent(InspectorIntent.SelectNode(node.id)) }
             .onPointerEvent(PointerEventType.Enter) { onIntent(InspectorIntent.HoverNode(node.id)) }
             .onPointerEvent(PointerEventType.Exit) { onIntent(InspectorIntent.HoverNode(null)) }
-            .padding(start = (8 + row.depth * 12).dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
+            .padding(end = 8.dp, top = 2.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            if (!row.hasChildren) "  " else if (row.expanded) "▾" else "▸",
-            modifier = Modifier.width(14.dp).clickable(enabled = row.hasChildren) { onIntent(InspectorIntent.ToggleExpanded(node.id)) },
-            style = MaterialTheme.typography.bodySmall,
-        )
         val faded = if (node.systemCreated) colors.onSurfaceVariant else colors.onSurface
-        Row(Modifier.weight(1f)) {
-            Text(node.name, style = MaterialTheme.typography.bodySmall, color = faded, maxLines = 1)
-            node.textValue?.let {
-                Text("  \"$it\"", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.weight(1f).clipToBounds()) {
+            Row(
+                Modifier.wrapContentWidth(Alignment.Start, unbounded = true)
+                    .offset { IntOffset(-hOffset.roundToInt(), 0) }
+                    .padding(start = 8.dp + INDENT * row.depth),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (!row.hasChildren) "  " else if (row.expanded) "▾" else "▸",
+                    modifier = Modifier.width(14.dp).clickable(enabled = row.hasChildren) { onIntent(InspectorIntent.ToggleExpanded(node.id)) },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(node.name, style = MaterialTheme.typography.bodySmall, color = faded, maxLines = 1, softWrap = false)
+                node.textValue?.let {
+                    Text("  \"${it.take(40)}\"", style = MaterialTheme.typography.bodySmall, color = colors.onSurfaceVariant, maxLines = 1, softWrap = false)
+                }
             }
         }
         if (showCounts) {
@@ -369,6 +394,7 @@ private fun CountCell(value: Int?) {
 
 // ───────────── 화면 캔버스 ─────────────
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ScreenCanvas(
     state: InspectorState,
@@ -395,7 +421,12 @@ private fun ScreenCanvas(
     Box(modifier.background(colors.surfaceVariant.copy(alpha = 0.4f)).onSizeChanged { panel = it }) {
         Canvas(
             Modifier.fillMaxSize()
-                .pointerInput(viewport) { handleCanvasInput(viewport, { currentRoots }, onIntent) },
+                // 클릭 = 가장 깊은 노드 선택, 드래그 = 이동, 휠 = 커서 기준 확대, 움직임 = hover.
+                .pointerInput(viewport) { detectTapGestures { p -> onIntent(InspectorIntent.SelectNode(viewport.hit(currentRoots, p))) } }
+                .pointerInput(viewport) { detectDragGestures { change, drag -> change.consume(); viewport.offset += drag } }
+                .onPointerEvent(PointerEventType.Move) { e -> e.changes.firstOrNull()?.let { onIntent(InspectorIntent.HoverNode(viewport.hit(currentRoots, it.position))) } }
+                .onPointerEvent(PointerEventType.Exit) { onIntent(InspectorIntent.HoverNode(null)) }
+                .onPointerEvent(PointerEventType.Scroll) { e -> e.changes.firstOrNull()?.let { viewport.zoom(it.scrollDelta.y, it.position) } },
         ) {
             withTransform({
                 translate(viewport.offset.x, viewport.offset.y)
@@ -454,58 +485,17 @@ private fun fit(viewport: ScreenViewport, panel: IntSize, content: ContentBounds
 private const val MIN_SCALE = 0.05f
 private const val MAX_SCALE = 8f
 
-/** 휠 = 커서 기준 확대, 드래그 = 이동, 클릭 = 가장 깊은 노드 선택, 움직임 = hover. */
-private suspend fun PointerInputScope.handleCanvasInput(
-    viewport: ScreenViewport,
-    roots: () -> List<LayoutNode>,
-    onIntent: (InspectorIntent) -> Unit,
-) {
-    fun toDevice(p: Offset) = Offset((p.x - viewport.offset.x) / viewport.scale, (p.y - viewport.offset.y) / viewport.scale)
-    var down: Offset? = null
-    var last: Offset? = null
-    var dragged = false
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent()
-            val change = event.changes.firstOrNull() ?: continue
-            when (event.type) {
-                PointerEventType.Scroll -> {
-                    val factor = if (change.scrollDelta.y > 0) 0.9f else 1.1f
-                    val newScale = (viewport.scale * factor).coerceIn(MIN_SCALE, MAX_SCALE)
-                    val anchor = toDevice(change.position)
-                    viewport.scale = newScale
-                    viewport.offset = Offset(change.position.x - anchor.x * newScale, change.position.y - anchor.y * newScale)
-                    change.consume()
-                }
-                PointerEventType.Press -> {
-                    down = change.position
-                    last = change.position
-                    dragged = false
-                }
-                PointerEventType.Move -> {
-                    val previous = last
-                    if (down != null && previous != null && change.pressed) {
-                        val delta = change.position - previous
-                        if (!dragged && (change.position - down!!).getDistance() > 4f) dragged = true
-                        if (dragged) viewport.offset += delta
-                        last = change.position
-                    } else {
-                        val p = toDevice(change.position)
-                        onIntent(InspectorIntent.HoverNode(NodeHitTest.hit(roots(), p.x.toInt(), p.y.toInt())))
-                    }
-                }
-                PointerEventType.Release -> {
-                    if (down != null && !dragged) {
-                        val p = toDevice(change.position)
-                        onIntent(InspectorIntent.SelectNode(NodeHitTest.hit(roots(), p.x.toInt(), p.y.toInt())))
-                    }
-                    down = null
-                    last = null
-                }
-                PointerEventType.Exit -> onIntent(InspectorIntent.HoverNode(null))
-            }
-        }
-    }
+/** 캔버스 좌표 → 기기 좌표에서 가장 깊은 노드. */
+private fun ScreenViewport.hit(roots: List<LayoutNode>, p: Offset): Long? =
+    NodeHitTest.hit(roots, ((p.x - offset.x) / scale).toInt(), ((p.y - offset.y) / scale).toInt())
+
+/** 커서 아래 점이 그대로 있도록 확대·축소한다. */
+private fun ScreenViewport.zoom(wheel: Float, cursor: Offset) {
+    if (wheel == 0f) return
+    val newScale = (scale * if (wheel > 0) 0.9f else 1.1f).coerceIn(MIN_SCALE, MAX_SCALE)
+    val anchor = Offset((cursor.x - offset.x) / scale, (cursor.y - offset.y) / scale)
+    scale = newScale
+    offset = Offset(cursor.x - anchor.x * newScale, cursor.y - anchor.y * newScale)
 }
 
 // ───────────── 속성 ─────────────
