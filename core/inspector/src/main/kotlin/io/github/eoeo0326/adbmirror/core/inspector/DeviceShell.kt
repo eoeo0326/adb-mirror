@@ -3,7 +3,6 @@ package io.github.eoeo0326.adbmirror.core.inspector
 import io.github.eoeo0326.adbmirror.core.adb.AdbBinaryTransport
 import io.github.eoeo0326.adbmirror.core.adb.PortForward
 import io.github.eoeo0326.adbmirror.core.adb.RemoteProcess
-import io.github.eoeo0326.adbmirror.core.domain.model.InspectorFailure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -45,6 +44,3 @@ suspend fun DeviceShell.pushDex(serial: String, local: File, remotePath: String)
     push(serial, local, remotePath)
     shell(serial, "chmod 444 $remotePath")
 }
-
-/** inspector 준비·연결 실패. [failure]로 UI 문구를 고른다. */
-class InspectorException(val failure: InspectorFailure, message: String, cause: Throwable? = null) : Exception(message, cause)

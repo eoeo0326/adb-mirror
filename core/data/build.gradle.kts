@@ -37,6 +37,8 @@ kotlin {
             implementation(libs.androidx.core) // FileProvider(스크린샷 클립보드)
         }
         jvmMain.dependencies {
+            // Layout Inspector(transport gRPC). Desktop만 쓴다.
+            implementation(projects.core.inspector)
             // 녹화 파일 디코딩(avformat·avcodec)과 WebP 프레임 인코딩(libwebp). 빌드하는 OS 것만 넣는다.
             implementation(libs.bytedeco.ffmpeg)
             implementation("org.bytedeco:ffmpeg:${libs.versions.bytedeco.ffmpeg.get()}:$javacppPlatform")

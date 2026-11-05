@@ -20,6 +20,7 @@ sealed interface SettingsIntent {
     data class SetOutputDir(val path: String?) : SettingsIntent
     /** null이면 자동으로 찾기 */
     data class SetAdbPath(val path: String?) : SettingsIntent
+    data class SetAndroidStudioPath(val path: String?) : SettingsIntent
     data object ToggleAutoUpdate : SettingsIntent
 }
 
@@ -40,6 +41,7 @@ class SettingsViewModel(getSettings: GetSettingsUseCase, private val updateSetti
             SettingsIntent.ToggleShowTouches -> s.copy(showTouches = !s.showTouches)
             is SettingsIntent.SetOutputDir -> s.copy(outputDir = intent.path)
             is SettingsIntent.SetAdbPath -> s.copy(adbPath = intent.path)
+            is SettingsIntent.SetAndroidStudioPath -> s.copy(androidStudioPath = intent.path)
             SettingsIntent.ToggleAutoUpdate -> s.copy(autoUpdate = !s.autoUpdate)
         }
     }

@@ -57,6 +57,7 @@ class PropertiesSettingsRepository(private val file: File) : SettingsRepository 
                 showTouches = p.getProperty("showTouches")?.toBooleanStrictOrNull() ?: d.showTouches,
                 outputDir = p.getProperty("outputDir"),
                 adbPath = p.getProperty("adbPath"),
+                androidStudioPath = p.getProperty("androidStudioPath"),
                 autoUpdate = p.getProperty("autoUpdate")?.toBooleanStrictOrNull() ?: d.autoUpdate,
             ).sanitized()
         }
@@ -71,6 +72,7 @@ class PropertiesSettingsRepository(private val file: File) : SettingsRepository 
             p["showTouches"] = s.showTouches.toString()
             s.outputDir?.let { p["outputDir"] = it }
             s.adbPath?.let { p["adbPath"] = it }
+            s.androidStudioPath?.let { p["androidStudioPath"] = it }
             p["autoUpdate"] = s.autoUpdate.toString()
             val dir = file.absoluteFile.parentFile.also { it.mkdirs() }
             val tmp = File.createTempFile("settings", ".tmp", dir)

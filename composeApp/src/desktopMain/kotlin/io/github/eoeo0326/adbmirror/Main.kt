@@ -91,6 +91,8 @@ fun main() {
         defaultOutputDescription = "기본 위치(${DesktopScreenshotSink().defaultDir().path})",
         pickFolder = { pickFolder("저장 폴더 선택") },
         pickAdb = { pickFile("adb 실행 파일 선택") },
+        // macOS의 .app은 번들(폴더)이라 폴더 고르기로 고른다.
+        pickAndroidStudio = { pickFolder("Android Studio 설치 위치 선택") },
     )
     // 창을 닫지 않고 종료 신호(SIGTERM·Ctrl+C)로 끝나도 서버·forward를 정리한다.
     Runtime.getRuntime().addShutdownHook(Thread { closeAllBlocking() })
