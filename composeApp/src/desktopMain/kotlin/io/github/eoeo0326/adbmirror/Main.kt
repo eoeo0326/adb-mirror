@@ -53,7 +53,11 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.feature.inspector.InspectorEffect
+import io.github.eoeo0326.adbmirror.feature.inspector.InspectorRoute
 import java.awt.Desktop
+import java.awt.Dimension
 import java.io.File
 import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
@@ -61,11 +65,14 @@ import java.util.concurrent.ConcurrentHashMap
 /** 열려 있는 미러링 창(serial → 창). */
 private val openWindows = mutableStateMapOf<String, MirrorWindowHolder>()
 
+/** 열려 있는 Layout Inspector 창(serial → 창). 미러링 창과 따로 산다. */
+private val inspectorWindows = mutableStateMapOf<String, InspectorWindowHolder>()
+
 /** 열려 있는 변환 창(첫 녹화 파일 → 창). 미러링 창과 따로 산다. */
 private val conversionWindows = mutableStateMapOf<String, ConversionWindowHolder>()
 
 /**
- * 창은 닫혔지만 정리가 끝나지 않은 것(미러링: serial, 변환: `conversion:<파일>` → 정리 작업).
+ * 창은 닫혔지만 정리가 끝나지 않은 것(미러링: serial, Inspector: `inspector:<serial>`, 변환: `conversion:<파일>` → 정리 작업).
  * 종료 훅이 이것도 기다린다.
  */
 private val closingWindows = ConcurrentHashMap<String, Job>()
@@ -73,6 +80,7 @@ private val closingWindows = ConcurrentHashMap<String, Job>()
 private fun closeAllBlocking() = runBlocking {
     withTimeoutOrNull(3_000) {
         openWindows.values.toList().forEach { it.close() }
+        inspectorWindows.values.toList().forEach { it.close() }
         conversionWindows.values.toList().forEach { it.close() }
         closingWindows.values.toList().joinAll()
     }
@@ -146,6 +154,22 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
     }
     DevAutoOpen(listViewModel)
 
+    // 기기마다 Inspector 창 하나. 이미 있으면 앞으로, 같은 기기 창을 정리하는 중이면 끝난 뒤에 연다.
+    val openInspector: (Device) -> Unit = { device ->
+        scope.launch {
+            val serial = device.serial
+            val existing = inspectorWindows[serial]
+            if (existing != null) {
+                existing.focusRequest.intValue++
+            } else {
+                closingWindows["inspector:$serial"]?.join()
+                val state = restoredWindowState(windowBounds, "inspector.$serial", INSPECTOR_WINDOW_SIZE, rememberSize = true)
+                inspectorWindows[serial] = InspectorWindowHolder(device, graph, state)
+            }
+        }
+    }
+    DevAutoInspect(listViewModel, openInspector)
+
     // 같은 녹화의 변환 창이 이미 있으면 앞으로 가져온다.
     val openConversion: (List<String>) -> Unit = { files ->
         val id = files.first()
@@ -213,7 +237,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
             }
             Window(onCloseRequest = closeWindow, state = holder.windowState, title = "ADB Mirror — ${holder.device.model ?: serial}") {
                 RememberWindowBounds(holder.windowState, windowBounds, "mirror.$serial", rememberSize = false)
-                MirrorMenuBar(holder, onCloseWindow = closeWindow, onOpenConversion = openConversion, onOpenSettings = openSettings, onQuit = quit)
+                MirrorMenuBar(holder, onCloseWindow = closeWindow, onOpenInspector = { openInspector(holder.device) }, onOpenConversion = openConversion, onOpenSettings = openSettings, onQuit = quit)
                 FitWindowToVideo(holder)
                 AppTheme {
                     // 미러링 창에 APK를 끌어 놓으면 이 기기에 설치한다.
@@ -223,6 +247,32 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                         if (dropping) ApkDropOverlay(holder.device.model ?: serial)
                     }
                 }
+            }
+        }
+    }
+
+    for ((serial, holder) in inspectorWindows) {
+        key("inspector:$serial") {
+            val closeWindow = {
+                if (inspectorWindows.remove(serial) != null) {
+                    val closingKey = "inspector:$serial"
+                    val job = scope.launch { holder.close() }
+                    closingWindows[closingKey] = job
+                    job.invokeOnCompletion { closingWindows.remove(closingKey, job) }
+                }
+            }
+            Window(onCloseRequest = closeWindow, state = holder.windowState, title = "Layout Inspector — ${holder.device.model ?: serial}") {
+                LaunchedEffect(Unit) {
+                    window.minimumSize = Dimension(INSPECTOR_MIN_SIZE.width.value.toInt(), INSPECTOR_MIN_SIZE.height.value.toInt())
+                }
+                val focus by holder.focusRequest
+                LaunchedEffect(focus) { if (focus > 0) window.toFront() }
+                LaunchedEffect(holder) {
+                    holder.viewModel.effects.collect { if (it is InspectorEffect.OpenSettings) openSettings() }
+                }
+                RememberWindowBounds(holder.windowState, windowBounds, "inspector.$serial", rememberSize = true)
+                InspectorMenuBar(holder, onCloseWindow = closeWindow, onOpenSettings = openSettings, onQuit = quit)
+                AppTheme { InspectorRoute(holder.viewModel) }
             }
         }
     }
@@ -279,6 +329,15 @@ private fun DevAutoOpen(viewModel: DeviceListViewModel) {
         viewModel.state.first { s -> s.devices.any { it.serial == serial } }
         viewModel.onIntent(DeviceListIntent.Select(serial))
         viewModel.onIntent(DeviceListIntent.Open)
+    }
+}
+
+/** 개발용: `ADB_MIRROR_DEV_INSPECT=<serial>`이면 그 기기가 보이는 대로 Layout Inspector 창을 연다. */
+@Composable
+private fun DevAutoInspect(viewModel: DeviceListViewModel, open: (Device) -> Unit) {
+    val serial = remember { System.getenv("ADB_MIRROR_DEV_INSPECT")?.takeIf { it.isNotBlank() } } ?: return
+    LaunchedEffect(serial) {
+        open(viewModel.state.first { s -> s.devices.any { it.serial == serial } }.devices.first { it.serial == serial })
     }
 }
 

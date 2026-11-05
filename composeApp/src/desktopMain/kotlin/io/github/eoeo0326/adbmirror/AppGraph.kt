@@ -3,6 +3,7 @@ package io.github.eoeo0326.adbmirror
 import io.github.eoeo0326.adbmirror.core.adb.AdbBinaryTransport
 import io.github.eoeo0326.adbmirror.core.data.app.ApkInstaller
 import io.github.eoeo0326.adbmirror.core.data.device.DeviceRepositoryImpl
+import io.github.eoeo0326.adbmirror.core.data.inspector.InspectorRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.device.WirelessDeviceRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.mirror.MirrorRepositoryImpl
 import io.github.eoeo0326.adbmirror.core.data.recording.FileRecordingRepository
@@ -47,6 +48,7 @@ import io.github.eoeo0326.adbmirror.core.domain.usecase.UpdateSettingsUseCase
 import io.github.eoeo0326.adbmirror.feature.conversion.ConversionViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.DeviceListViewModel
 import io.github.eoeo0326.adbmirror.feature.devices.WirelessActions
+import io.github.eoeo0326.adbmirror.feature.inspector.InspectorViewModel
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorViewModel
 import io.github.eoeo0326.adbmirror.feature.settings.SettingsViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -56,9 +58,9 @@ import kotlinx.coroutines.withContext
 
 /** 수동 DI. 화면·UseCase가 더 늘면 Koin으로 옮긴다. */
 class AppGraph(
-    transport: AdbBinaryTransport,
+    private val transport: AdbBinaryTransport,
     private val settings: SettingsRepository,
-    dataDir: java.io.File,
+    private val dataDir: java.io.File,
     private val appVersion: AppVersion,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -95,6 +97,9 @@ class AppGraph(
             GetKnownWirelessDevicesUseCase(wireless),
         ),
     )
+
+    /** 창마다 새 연결을 연다(기기 준비·정리는 창 수명과 같다). */
+    fun inspectorViewModel(device: Device) = InspectorViewModel(device, InspectorRepositoryImpl(transport, settings, dataDir))
 
     fun mirrorViewModel(device: Device) = MirrorViewModel(
         device = device,
