@@ -114,8 +114,7 @@ class TransportClient(private val channel: Channel, scope: CoroutineScope) {
      * 그래서 먼저 `GetAgentStatus`로 확인하고, 보낸 뒤에도 이벤트를 기다리는 동안 상태를 주기적으로 다시 묻는다.
      */
     suspend fun attachAgent(streamId: Long, pid: Int, packageName: String, cpuArch: String, timeoutMs: Long = 10_000): AgentData.Status {
-        if (agentStatus(streamId, pid, packageName) == AgentData.Status.ATTACHED) return AgentData.Status.ATTACHED
-        // 이전 시도에서 받은 상태(예: UNATTACHABLE)를 이번 결과로 착각하지 않도록, 보내기 전 값과 다른 것만 받는다.
+        // 이 연결에서 이미 붙었다는 이벤트를 받았으면 다시 보내지 않는다.
         val before = agents.value[pid]
         if (before == AgentData.Status.ATTACHED) return AgentData.Status.ATTACHED
         val command = Command.newBuilder().setStreamId(streamId).setPid(pid).setType(Command.CommandType.ATTACH_AGENT)
@@ -124,12 +123,15 @@ class TransportClient(private val channel: Channel, scope: CoroutineScope) {
                     .setAgentConfigPath(DeviceFiles.AGENT_CONFIG).setPackageName(packageName),
             ).build()
         execute(command)
+        // 새로 붙거나(데몬이 바뀌어 다시 붙는 경우 포함) 실패하면 AGENT 이벤트가 온다. 이전 상태(예: UNATTACHABLE)와 다른 것만 받는다.
+        // 같은 데몬에 이미 붙어 있으면 이벤트가 오지 않으므로, 잠시 기다린 뒤 GetAgentStatus로 확인한다.
+        // (데몬이 바뀐 뒤에도 GetAgentStatus는 ATTACHED를 돌려주므로 먼저 묻지 않는다.)
         return withTimeoutOrNull(timeoutMs) {
+            withTimeoutOrNull(AGENT_EVENT_GRACE_MS) { agents.mapNotNull { it[pid] }.first { it != before } }?.let { return@withTimeoutOrNull it }
             while (true) {
-                val fromEvent = withTimeoutOrNull(AGENT_POLL_MS) { agents.mapNotNull { it[pid] }.first { it != before } }
-                if (fromEvent != null) return@withTimeoutOrNull fromEvent
                 val polled = agentStatus(streamId, pid, packageName)
                 if (polled != AgentData.Status.UNSPECIFIED) return@withTimeoutOrNull polled
+                withTimeoutOrNull(AGENT_POLL_MS) { agents.mapNotNull { it[pid] }.first { it != before } }?.let { return@withTimeoutOrNull it }
             }
             @Suppress("UNREACHABLE_CODE")
             AgentData.Status.UNSPECIFIED
@@ -152,6 +154,7 @@ class TransportClient(private val channel: Channel, scope: CoroutineScope) {
         val GET_VERSION: MethodDescriptor<VersionRequest, VersionResponse> =
             method("GetVersion", MethodDescriptor.MethodType.UNARY, VersionRequest.getDefaultInstance(), VersionResponse.getDefaultInstance())
         private const val AGENT_POLL_MS = 500L
+        private const val AGENT_EVENT_GRACE_MS = 3_000L
 
         val GET_AGENT_STATUS: MethodDescriptor<AgentStatusRequest, AgentData> =
             method("GetAgentStatus", MethodDescriptor.MethodType.UNARY, AgentStatusRequest.getDefaultInstance(), AgentData.getDefaultInstance())
