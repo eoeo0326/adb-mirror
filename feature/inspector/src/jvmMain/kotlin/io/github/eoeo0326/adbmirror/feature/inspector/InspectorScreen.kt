@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -187,6 +188,7 @@ private fun SearchField(query: String, onChange: (String) -> Unit) {
         Box(Modifier.width(180.dp).background(colors.surfaceVariant, MaterialTheme.shapes.small).padding(horizontal = 8.dp, vertical = 6.dp)) {
             BasicTextField(query, onChange, singleLine = true, textStyle = MaterialTheme.typography.bodySmall.copy(color = colors.onSurface), modifier = Modifier.fillMaxWidth())
         }
+        TextButton(onClick = { onChange("") }, enabled = query.isNotEmpty()) { Text("지우기") }
     }
 }
 
@@ -261,7 +263,7 @@ private fun Failure(phase: InspectorPhase.Failed, onIntent: (InspectorIntent) ->
 
 @Composable
 private fun Panes(state: InspectorState, screenshots: Map<Long, ImageBitmap>, viewport: ScreenViewport, onIntent: (InspectorIntent) -> Unit) {
-    var treeWidth by remember { mutableStateOf(320.dp) }
+    var treeWidth by remember { mutableStateOf(400.dp) }
     var propertiesWidth by remember { mutableStateOf(340.dp) }
     Row(Modifier.fillMaxSize()) {
         ComponentTree(state, onIntent, Modifier.width(treeWidth).fillMaxHeight())
@@ -283,7 +285,10 @@ private fun Splitter(onDrag: (Dp) -> Unit) {
 }
 
 private val COUNT_WIDTH = 52.dp
-private val INDENT = 12.dp
+private val INDENT = 8.dp
+
+/** 깊은 행의 이름이 보이도록 남겨 두는 너비. */
+private val NAME_ROOM = 120.dp
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -296,17 +301,28 @@ private fun ComponentTree(state: InspectorState, onIntent: (InspectorIntent) -> 
         if (index >= 0 && listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.animateScrollToItem(index)
     }
     val showCounts = state.showRecompositionColumns && state.composeAvailable
-    // 깊은 트리는 이름이 잘리지 않게 이름 영역만 가로로 민다(Recomp·Skip 열은 고정).
+    // 깊은 트리는 들여쓰기만으로 이름이 패널 밖으로 밀린다. 지금 보이는 행 중 가장 얕은 행이 왼쪽에 오도록
+    // 이름 영역을 자동으로 밀고(Recomp·Skip 열은 고정), 가로 스크롤(트랙패드·Shift+휠)로 더 밀거나 당긴다.
     val density = LocalDensity.current
-    var hOffset by remember { mutableFloatStateOf(0f) }
-    val maxOffset = with(density) { ((rows.maxOfOrNull { it.depth } ?: 0) * INDENT.value).dp.toPx() }
-    LaunchedEffect(state.selectedNodeId) {
-        val depth = rows.firstOrNull { it.node.id == state.selectedNodeId }?.depth ?: return@LaunchedEffect
-        hOffset = with(density) { ((depth - 2).coerceAtLeast(0) * INDENT.value).dp.toPx() }
+    val visibleDepths by remember(rows) {
+        derivedStateOf {
+            val depths = listState.layoutInfo.visibleItemsInfo.mapNotNull { rows.getOrNull(it.index)?.depth }
+            (depths.minOrNull() ?: 0) to (depths.maxOrNull() ?: 0)
+        }
     }
+    var nameAreaPx by remember { mutableIntStateOf(0) }
+    var manual by remember { mutableFloatStateOf(0f) }
+    // 보이는 가장 깊은 행의 이름에 NAME_ROOM을 남기도록 밀되, 보이는 가장 얕은 행의 들여쓰기보다 더 밀지는 않는다.
+    val auto = with(density) {
+        val (shallowest, deepest) = visibleDepths
+        val need = (INDENT * deepest + NAME_ROOM).toPx() - nameAreaPx
+        need.coerceIn(0f, (INDENT * shallowest).toPx())
+    }
+    val maxOffset = with(density) { (INDENT * (rows.maxOfOrNull { it.depth } ?: 0)).toPx() }
+    val hOffset = (auto + manual).coerceIn(0f, maxOffset)
     Column(modifier.onPointerEvent(PointerEventType.Scroll) { e ->
         val dx = e.changes.firstOrNull()?.scrollDelta?.x ?: 0f
-        if (dx != 0f) hOffset = (hOffset + dx * 40f).coerceIn(0f, maxOffset)
+        if (dx != 0f) manual = (manual + dx * 40f).coerceIn(-auto, maxOffset - auto)
     }) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
             Text("이름", style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
@@ -316,7 +332,8 @@ private fun ComponentTree(state: InspectorState, onIntent: (InspectorIntent) -> 
             }
         }
         HorizontalDivider()
-        LazyColumn(Modifier.fillMaxSize(), state = listState) {
+        val countsWidth = if (showCounts) COUNT_WIDTH * 2 else 0.dp
+        LazyColumn(Modifier.fillMaxSize().onSizeChanged { nameAreaPx = it.width - with(density) { (countsWidth + 16.dp).roundToPx() } }, state = listState) {
             items(rows, key = { it.node.rootId.toString() + ":" + it.node.id }) { row ->
                 TreeRowItem(
                     row = row,
@@ -457,7 +474,16 @@ private fun ScreenCanvas(
                 }
             }
         }
-        if (state.roots.isEmpty()) Text("화면을 받는 중…", modifier = Modifier.align(Alignment.Center), color = colors.onSurfaceVariant)
+        val drawable = state.roots.any { it.bounds.width > 0 && it.bounds.height > 0 }
+        when {
+            state.lastUpdatedMs == null -> Text("화면을 받는 중…", modifier = Modifier.align(Alignment.Center), color = colors.onSurfaceVariant)
+            !drawable -> Text(
+                "보이는 창이 없습니다. 앱이 백그라운드에 있으면 기기에서 앱을 앞으로 가져오세요",
+                modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                color = colors.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
