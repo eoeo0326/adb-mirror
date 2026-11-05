@@ -16,6 +16,8 @@ data class DeviceListState(
     val wireless: WirelessForm? = null,
     /** USB로 붙은 기기도 목록에 나오는지(Android 앱은 무선만). 안내 문구에 쓴다. */
     val usb: Boolean = true,
+    /** Layout Inspector를 열 수 있는 플랫폼인지(Desktop만). false면 버튼을 숨긴다. */
+    val inspectorAvailable: Boolean = false,
 ) {
     val selected: Device? get() = devices.firstOrNull { it.serial == selectedSerial }
     val canOpen: Boolean get() = selected?.isSelectable == true
@@ -60,6 +62,8 @@ sealed interface DeviceListIntent {
     /** 고른 기기의 미러링 창을 연다(이미 열려 있으면 앞으로). */
     data object Open : DeviceListIntent
     data class MirrorClosed(val serial: String) : DeviceListIntent
+    /** 고른 기기의 Layout Inspector 창을 연다(이미 열려 있으면 앞으로). */
+    data object OpenInspector : DeviceListIntent
     data class EditWireless(val form: WirelessForm) : DeviceListIntent
     data object Pair : DeviceListIntent
     data object ConnectWireless : DeviceListIntent
@@ -89,6 +93,9 @@ sealed interface DeviceListResult {
 sealed interface DeviceListEffect {
     /** 이 기기의 미러링 창을 열거나 앞으로 가져온다. */
     data class OpenMirror(val device: Device) : DeviceListEffect
+
+    /** 이 기기의 Layout Inspector 창을 열거나 앞으로 가져온다(Desktop만 낸다). */
+    data class OpenInspector(val device: Device) : DeviceListEffect
 
     /** 페어링 코드를 받을 알림을 띄우고 기기의 개발자 옵션을 연다. */
     data object StartNotificationPairing : DeviceListEffect

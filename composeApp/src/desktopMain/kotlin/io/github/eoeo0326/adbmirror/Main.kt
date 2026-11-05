@@ -127,6 +127,20 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
     var wirelessOpen by remember { mutableStateOf(false) }
     val wirelessFocus = remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
+    // 기기마다 Inspector 창 하나. 이미 있으면 앞으로, 같은 기기 창을 정리하는 중이면 끝난 뒤에 연다.
+    val openInspector: (Device) -> Unit = { device ->
+        scope.launch {
+            val serial = device.serial
+            val existing = inspectorWindows[serial]
+            if (existing != null) {
+                existing.focusRequest.intValue++
+            } else {
+                closingWindows["inspector:$serial"]?.join()
+                val state = restoredWindowState(windowBounds, "inspector.$serial", INSPECTOR_WINDOW_SIZE, rememberSize = true)
+                inspectorWindows[serial] = InspectorWindowHolder(device, graph, state)
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         listViewModel.effects.collect { effect ->
             when (effect) {
@@ -142,6 +156,7 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                         openWindows[serial] = MirrorWindowHolder(effect.device, graph, state)
                     }
                 }
+                is DeviceListEffect.OpenInspector -> openInspector(effect.device)
                 DeviceListEffect.OpenWirelessAdd -> {
                     wirelessOpen = true
                     wirelessFocus.intValue++
@@ -154,20 +169,6 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
     }
     DevAutoOpen(listViewModel)
 
-    // 기기마다 Inspector 창 하나. 이미 있으면 앞으로, 같은 기기 창을 정리하는 중이면 끝난 뒤에 연다.
-    val openInspector: (Device) -> Unit = { device ->
-        scope.launch {
-            val serial = device.serial
-            val existing = inspectorWindows[serial]
-            if (existing != null) {
-                existing.focusRequest.intValue++
-            } else {
-                closingWindows["inspector:$serial"]?.join()
-                val state = restoredWindowState(windowBounds, "inspector.$serial", INSPECTOR_WINDOW_SIZE, rememberSize = true)
-                inspectorWindows[serial] = InspectorWindowHolder(device, graph, state)
-            }
-        }
-    }
     DevAutoInspect(listViewModel, openInspector)
 
     // 같은 녹화의 변환 창이 이미 있으면 앞으로 가져온다.
@@ -266,7 +267,12 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                     window.minimumSize = Dimension(INSPECTOR_MIN_SIZE.width.value.toInt(), INSPECTOR_MIN_SIZE.height.value.toInt())
                 }
                 val focus by holder.focusRequest
-                LaunchedEffect(focus) { if (focus > 0) window.toFront() }
+                LaunchedEffect(focus) {
+                    if (focus > 0) {
+                        window.toFront()
+                        window.requestFocus()
+                    }
+                }
                 LaunchedEffect(holder) {
                     holder.viewModel.effects.collect { if (it is InspectorEffect.OpenSettings) openSettings() }
                 }

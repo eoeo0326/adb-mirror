@@ -39,9 +39,11 @@ class DeviceListViewModel(
     getDevices: GetDevicesUseCase,
     private val wireless: WirelessActions? = null,
     usb: Boolean = true,
+    /** Layout Inspector를 지원하는 플랫폼이면 true(Desktop). */
+    inspector: Boolean = false,
 ) : ViewModel() {
     private val _state = MutableStateFlow(
-        DeviceListState(wireless = wireless?.let { WirelessForm(canPairByNotification = it.notificationPairing) }, usb = usb),
+        DeviceListState(wireless = wireless?.let { WirelessForm(canPairByNotification = it.notificationPairing) }, usb = usb, inspectorAvailable = inspector),
     )
     val state: StateFlow<DeviceListState> = _state.asStateFlow()
 
@@ -78,6 +80,12 @@ class DeviceListViewModel(
                 _effects.trySend(DeviceListEffect.OpenMirror(device))
             }
             is DeviceListIntent.MirrorClosed -> reduce(DeviceListResult.Closed(intent.serial))
+            DeviceListIntent.OpenInspector -> {
+                val current = _state.value
+                if (!current.inspectorAvailable) return
+                val device = current.selected?.takeIf { current.canOpen } ?: return
+                _effects.trySend(DeviceListEffect.OpenInspector(device))
+            }
             is DeviceListIntent.EditWireless -> reduce(DeviceListResult.WirelessEdited(intent.form))
             DeviceListIntent.Pair -> wirelessAction("페어링하는 중…", paired = true) { w, f ->
                 w.pair(f.host, f.pairPort, f.code)

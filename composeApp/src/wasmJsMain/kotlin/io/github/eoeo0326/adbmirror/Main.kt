@@ -105,7 +105,8 @@ private fun WebApp(graph: WebAppGraph) {
                     mirror = MirrorHolder(effect.device, graph)
                 }
                 // Web은 무선 기기 추가를 지원하지 않아 오지 않는다.
-                DeviceListEffect.StartNotificationPairing, DeviceListEffect.OpenWirelessAdd, DeviceListEffect.WirelessConnected -> Unit
+                // Layout Inspector는 Desktop만 지원해 오지 않는다.
+                is DeviceListEffect.OpenInspector, DeviceListEffect.StartNotificationPairing, DeviceListEffect.OpenWirelessAdd, DeviceListEffect.WirelessConnected -> Unit
             }
         }
     }

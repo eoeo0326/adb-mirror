@@ -90,6 +90,8 @@ private fun AndroidApp(graph: AndroidAppGraph) {
                     mirror?.let { old -> scope.launch { old.close() } }
                     mirror = MirrorHolder(effect.device, graph)
                 }
+                // Layout Inspector는 Desktop만 지원해 오지 않는다.
+                is DeviceListEffect.OpenInspector -> Unit
                 DeviceListEffect.OpenWirelessAdd -> addingWireless = true
                 DeviceListEffect.WirelessConnected -> addingWireless = false
                 DeviceListEffect.StartNotificationPairing ->

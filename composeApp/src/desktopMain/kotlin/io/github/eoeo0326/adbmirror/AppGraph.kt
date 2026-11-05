@@ -96,6 +96,7 @@ class AppGraph(
             DisconnectWirelessDeviceUseCase(wireless),
             GetKnownWirelessDevicesUseCase(wireless),
         ),
+        inspector = true,
     )
 
     /** 창마다 새 연결을 연다(기기 준비·정리는 창 수명과 같다). */

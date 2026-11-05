@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -86,8 +87,13 @@ private fun ColumnScope.DeviceListBody(state: DeviceListState, onIntent: (Device
             }
         }
         val opening = state.selected?.serial in state.openSerials
-        Button(onClick = { onIntent(DeviceListIntent.Open) }, enabled = state.canOpen, modifier = Modifier.fillMaxWidth()) {
-            Text(if (opening) "미러링 창 보기" else "미러링 시작")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = { onIntent(DeviceListIntent.Open) }, enabled = state.canOpen, modifier = Modifier.weight(1f)) {
+                Text(if (opening) "미러링 창 보기" else "미러링 시작")
+            }
+            if (state.inspectorAvailable) {
+                OutlinedButton(onClick = { onIntent(DeviceListIntent.OpenInspector) }, enabled = state.canOpen) { Text("Layout Inspector") }
+            }
         }
     }
 }
