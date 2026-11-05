@@ -37,6 +37,8 @@ class SettingsPlatform(
     val defaultOutputDescription: String,
     val pickFolder: (() -> String?)? = null,
     val pickAdb: (() -> String?)? = null,
+    /** Layout Inspector가 쓰는 Android Studio 위치 고르기. null이면 그 섹션을 숨긴다(Desktop만). */
+    val pickAndroidStudio: (() -> String?)? = null,
 )
 
 /** [update]가 있으면(Desktop) 업데이트 섹션을 보인다. */
@@ -97,6 +99,16 @@ fun SettingsScreen(
             reset = if (settings.adbPath != null) ({ onIntent(SettingsIntent.SetAdbPath(null)) }) else null,
             resetLabel = "자동",
         )
+
+        platform.pickAndroidStudio?.let { pick ->
+            Section("Android Studio", "Layout Inspector가 기기에 올릴 파일을 가져옵니다.")
+            PathRow(
+                value = settings.androidStudioPath ?: "자동으로 찾기(설치된 것 중 최신)",
+                pick = { pick()?.let { onIntent(SettingsIntent.SetAndroidStudioPath(it)) } },
+                reset = if (settings.androidStudioPath != null) ({ onIntent(SettingsIntent.SetAndroidStudioPath(null)) }) else null,
+                resetLabel = "자동",
+            )
+        }
 
         if (update != null && onUpdateIntent != null) {
             Section("업데이트", "현재 버전 ${update.current}")

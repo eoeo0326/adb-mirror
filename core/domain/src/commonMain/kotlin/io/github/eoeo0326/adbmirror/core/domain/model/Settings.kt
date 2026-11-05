@@ -13,6 +13,8 @@ data class Settings(
     val outputDir: String? = null,
     /** adb 실행 파일. null이면 PATH·ANDROID_HOME·기본 SDK 위치에서 찾는다. */
     val adbPath: String? = null,
+    /** Layout Inspector가 기기 쪽 파일을 가져올 Android Studio 설치. null이면 기본 위치에서 최신 설치를 찾는다. Desktop만 쓴다. */
+    val androidStudioPath: String? = null,
     /** 앱을 켤 때 새 버전을 확인하고 내려받는다(설치는 묻는다). Desktop만 쓴다. */
     val autoUpdate: Boolean = true,
 ) {
@@ -24,6 +26,7 @@ data class Settings(
             maxFps = maxFps.takeIf { it in FPS_RANGE } ?: defaults.maxFps,
             outputDir = outputDir?.takeIf { it.isNotBlank() },
             adbPath = adbPath?.takeIf { it.isNotBlank() },
+            androidStudioPath = androidStudioPath?.takeIf { it.isNotBlank() },
         )
     }
 

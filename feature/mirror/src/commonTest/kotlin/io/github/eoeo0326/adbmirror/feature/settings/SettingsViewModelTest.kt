@@ -36,12 +36,15 @@ class SettingsViewModelTest {
         vm.onIntent(SettingsIntent.ToggleTouchEffect)
         vm.onIntent(SettingsIntent.SetOutputDir("/shots"))
         vm.onIntent(SettingsIntent.SetAdbPath("/sdk/adb"))
-        val expected = Settings(maxSize = 0, maxFps = 30, touchEffect = false, outputDir = "/shots", adbPath = "/sdk/adb")
+        vm.onIntent(SettingsIntent.SetAndroidStudioPath("/Applications/Android Studio.app"))
+        val expected = Settings(maxSize = 0, maxFps = 30, touchEffect = false, outputDir = "/shots", adbPath = "/sdk/adb", androidStudioPath = "/Applications/Android Studio.app")
         assertEquals(expected, settings.value)
         assertEquals(expected, vm.state.value)
 
         vm.onIntent(SettingsIntent.SetOutputDir(null))
         vm.onIntent(SettingsIntent.SetAdbPath(null))
+        vm.onIntent(SettingsIntent.SetAndroidStudioPath(null))
+        assertEquals(null, vm.state.value.androidStudioPath)
         assertEquals(null, vm.state.value.outputDir)
         assertEquals(null, vm.state.value.adbPath)
     }
