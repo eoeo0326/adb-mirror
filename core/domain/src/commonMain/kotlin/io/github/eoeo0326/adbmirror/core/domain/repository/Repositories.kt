@@ -5,6 +5,8 @@ import io.github.eoeo0326.adbmirror.core.domain.model.ConversionOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.VideoInfo
 import io.github.eoeo0326.adbmirror.core.domain.model.ConversionProgress
 import io.github.eoeo0326.adbmirror.core.domain.model.Device
+import io.github.eoeo0326.adbmirror.core.domain.model.InspectorConnection
+import io.github.eoeo0326.adbmirror.core.domain.model.InspectorStep
 import io.github.eoeo0326.adbmirror.core.domain.model.InstallResult
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorOptions
 import io.github.eoeo0326.adbmirror.core.domain.model.MirrorSession
@@ -104,4 +106,12 @@ interface UpdateRepository {
 interface SettingsRepository {
     val settings: Flow<Settings>
     suspend fun update(transform: (Settings) -> Settings)
+}
+
+/**
+ * 기기의 debuggable 앱을 들여다보는 Layout Inspector(Desktop 전용). 사용자 PC의 Android Studio 파일을 기기에 올려 붙는다.
+ * 실패하면 [io.github.eoeo0326.adbmirror.core.domain.model.InspectorFailure]를 담은 예외를 던진다.
+ */
+interface InspectorRepository {
+    suspend fun connect(serial: String, onStep: (InspectorStep) -> Unit = {}): InspectorConnection
 }

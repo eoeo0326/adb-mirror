@@ -1,5 +1,7 @@
 package io.github.eoeo0326.adbmirror.core.domain.model
 
+import kotlinx.coroutines.flow.Flow
+
 /** Layout Inspector로 들여다볼 수 있는 debuggable 프로세스. */
 data class InspectableProcess(
     val pid: Int,
@@ -103,4 +105,45 @@ sealed interface InspectorEvent {
 
     /** 세션이 더 진행할 수 없다. */
     data class Failed(val reason: InspectorFailure, val detail: String? = null) : InspectorEvent
+}
+
+/** 기기 하나에 준비된 Layout Inspector 연결. 프로세스를 골라 [inspect]한다. */
+interface InspectorConnection {
+    val serial: String
+
+    /** 쓰고 있는 Android Studio 이름(예: `Android Studio 2026.2.1`). 상태줄에 보인다. */
+    val studioLabel: String
+
+    /** 검사할 수 있는(debuggable) 프로세스. 포그라운드 프로세스가 앞에 온다. */
+    suspend fun processes(): List<InspectableProcess>
+
+    /** 프로세스에 붙어 세션을 연다. 실패하면 [InspectorFailure]를 담은 예외. 한 번에 세션 하나만 연다. */
+    suspend fun inspect(process: InspectableProcess, onStep: (InspectorStep) -> Unit = {}): InspectorSession
+
+    /** 열린 세션을 닫고 transport 연결·forward·(띄운) 데몬·기기 설정을 정리한다. 여러 번 불러도 된다. */
+    suspend fun close()
+}
+
+/** 프로세스 하나를 들여다보는 세션. 트리·스크린샷·오류는 [events]로 온다. */
+interface InspectorSession {
+    val process: InspectableProcess
+    val events: Flow<InspectorEvent>
+
+    /** 앱의 Compose UI 버전. Compose 정보를 볼 수 없으면 null. */
+    val composeVersion: String?
+
+    suspend fun setLive(live: Boolean)
+
+    /** 실시간이 꺼져 있을 때 한 번 다시 받는다. */
+    suspend fun refresh()
+
+    suspend fun resetRecompositionCounts()
+
+    suspend fun setShowSystemComposables(show: Boolean)
+
+    /** View는 속성, Composable은 파라미터·semantics. */
+    suspend fun properties(node: LayoutNode): List<InspectorProperty>
+
+    /** inspector를 폐기한다. 여러 번 불러도 된다. 연결은 [InspectorConnection.close]가 닫는다. */
+    suspend fun close()
 }
