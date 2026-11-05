@@ -15,7 +15,8 @@ class ProcessLister(private val shell: DeviceShell) {
     suspend fun debuggable(serial: String, abis: List<String>): List<InspectableProcess> {
         val apps = parsePs(shell.shell(serial, "ps -A -o PID,PPID,USER,NAME"))
         if (apps.processes.isEmpty()) return emptyList()
-        val packages = apps.processes.map { it.packageName }.distinct()
+        // 기기에서 읽은 이름을 셸에 넣으므로 패키지 이름 형식만 통과시킨다.
+        val packages = apps.processes.map { it.packageName }.distinct().filter { PACKAGE_NAME.matches(it) }
         val script = packages.joinToString("; ") { "run-as $it true >/dev/null 2>&1 && echo $it" } + "; true"
         val debuggable = shell.shell(serial, script).lines().map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         val foreground = foregroundPackage(shell.shell(serial, "dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity' || true"))
@@ -37,6 +38,7 @@ class ProcessLister(private val shell: DeviceShell) {
 
     companion object {
         private val APP_USER = Regex("^u\\d+_a\\d+$")
+        private val PACKAGE_NAME = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+$")
 
         internal fun parsePs(output: String): PsResult {
             var zygote64: Int? = null

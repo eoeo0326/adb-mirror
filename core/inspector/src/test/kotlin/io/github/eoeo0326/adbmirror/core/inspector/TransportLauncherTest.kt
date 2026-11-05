@@ -138,12 +138,28 @@ class TransportLauncherTest {
         withTimeout(5_000) { connection.client.agents.first { 55 in it } }
         val status = connection.client.attachAgent(connection.deviceId, 55, "com.example", "arm64", timeoutMs = 1_000)
         assertEquals(AgentData.Status.ATTACHED, status)
+        assertTrue(server.commands.isEmpty(), "이미 붙은 프로세스에는 다시 보내지 않는다")
+        // 아무 소식이 없으면 UNSPECIFIED.
+        assertEquals(AgentData.Status.UNSPECIFIED, connection.client.attachAgent(connection.deviceId, 66, "com.example", "arm64", timeoutMs = 200))
         val sent = server.commands.single()
+        assertEquals(66, sent.pid)
         assertEquals("libjvmtiagent_arm64.so", sent.attachAgent.agentLibFileName)
         assertEquals(DeviceFiles.AGENT_CONFIG, sent.attachAgent.agentConfigPath)
         assertEquals("com.example", sent.attachAgent.packageName)
-        // 아무 소식이 없으면 UNSPECIFIED.
-        assertEquals(AgentData.Status.UNSPECIFIED, connection.client.attachAgent(connection.deviceId, 66, "x", "arm64", timeoutMs = 200))
+        connection.close()
+    }
+
+    @Test
+    fun attachAgentIgnoresStaleStatusFromEarlierAttempt() = runBlocking {
+        val connection = launcher(FakeDeviceShell()).launch("S1", install)
+        withTimeout(5_000) { server.subscribed.await() }
+        fun agent(status: AgentData.Status) =
+            Event.newBuilder().setKind(Event.Kind.AGENT).setPid(77).setAgentData(AgentData.newBuilder().setStatus(status)).build()
+        // 이전 시도의 UNATTACHABLE이 남아 있다.
+        server.events.emit(agent(AgentData.Status.UNATTACHABLE))
+        withTimeout(5_000) { connection.client.agents.first { 77 in it } }
+        server.onCommand = { server.events.emit(agent(AgentData.Status.ATTACHED)) }
+        assertEquals(AgentData.Status.ATTACHED, connection.client.attachAgent(connection.deviceId, 77, "com.example", "arm64", timeoutMs = 2_000))
         connection.close()
     }
 }

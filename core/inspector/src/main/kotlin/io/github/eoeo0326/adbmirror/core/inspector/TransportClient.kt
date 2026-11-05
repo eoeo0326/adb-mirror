@@ -115,6 +115,9 @@ class TransportClient(private val channel: Channel, scope: CoroutineScope) {
      */
     suspend fun attachAgent(streamId: Long, pid: Int, packageName: String, cpuArch: String, timeoutMs: Long = 10_000): AgentData.Status {
         if (agentStatus(streamId, pid, packageName) == AgentData.Status.ATTACHED) return AgentData.Status.ATTACHED
+        // 이전 시도에서 받은 상태(예: UNATTACHABLE)를 이번 결과로 착각하지 않도록, 보내기 전 값과 다른 것만 받는다.
+        val before = agents.value[pid]
+        if (before == AgentData.Status.ATTACHED) return AgentData.Status.ATTACHED
         val command = Command.newBuilder().setStreamId(streamId).setPid(pid).setType(Command.CommandType.ATTACH_AGENT)
             .setAttachAgent(
                 AttachAgent.newBuilder().setAgentLibFileName(DeviceFiles.agentFileName(cpuArch))
@@ -123,7 +126,7 @@ class TransportClient(private val channel: Channel, scope: CoroutineScope) {
         execute(command)
         return withTimeoutOrNull(timeoutMs) {
             while (true) {
-                val fromEvent = withTimeoutOrNull(AGENT_POLL_MS) { agents.mapNotNull { it[pid] }.first() }
+                val fromEvent = withTimeoutOrNull(AGENT_POLL_MS) { agents.mapNotNull { it[pid] }.first { it != before } }
                 if (fromEvent != null) return@withTimeoutOrNull fromEvent
                 val polled = agentStatus(streamId, pid, packageName)
                 if (polled != AgentData.Status.UNSPECIFIED) return@withTimeoutOrNull polled

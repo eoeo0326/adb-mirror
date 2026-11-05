@@ -66,4 +66,20 @@ class ProcessListerTest {
         assertNull(ProcessLister.cpuArch(listOf("arm64-v8a"), is64 = false))
         assertEquals("x86_64", ProcessLister.cpuArch(listOf("x86_64", "x86"), is64 = true))
     }
+
+    @Test
+    fun dropsNamesThatAreNotPackageNamesBeforeBuildingShellScript() = runBlocking {
+        val evil = """
+              PID  PPID USER         NAME
+              874     1 root         zygote64
+             9000   874 u0_a1        com.ok.app
+             9001   874 u0_a2        x; reboot
+             9002   874 u0_a3        com.bad$(id)
+        """.trimIndent()
+        val shell = Shell(evil, "", setOf("com.ok.app"))
+        val list = ProcessLister(shell).debuggable("S1", listOf("arm64-v8a"))
+        assertEquals(listOf("com.ok.app"), list.map { it.packageName })
+        val script = shell.scripts.single()
+        assertEquals("run-as com.ok.app true >/dev/null 2>&1 && echo com.ok.app; true", script)
+    }
 }
