@@ -9,6 +9,8 @@ import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.MenuBar
 import io.github.eoeo0326.adbmirror.feature.mirror.Connection
 import io.github.eoeo0326.adbmirror.feature.mirror.MirrorIntent
+import io.github.eoeo0326.adbmirror.feature.inspector.InspectorIntent
+import io.github.eoeo0326.adbmirror.feature.inspector.InspectorPhase
 import io.github.eoeo0326.adbmirror.feature.mirror.RecordingState
 
 internal val isMac: Boolean = System.getProperty("os.name").orEmpty().lowercase().startsWith("mac")
@@ -24,6 +26,7 @@ internal fun shortcut(key: Key) = KeyShortcut(key, meta = isMac, ctrl = !isMac)
 fun FrameWindowScope.MirrorMenuBar(
     holder: MirrorWindowHolder,
     onCloseWindow: () -> Unit,
+    onOpenInspector: () -> Unit,
     onOpenConversion: (List<String>) -> Unit,
     onOpenSettings: () -> Unit,
     onQuit: () -> Unit,
@@ -60,6 +63,32 @@ fun FrameWindowScope.MirrorMenuBar(
         Menu("기기") {
             Item("연결 끊기", enabled = session != null) { send(MirrorIntent.Disconnect) }
             Item("다시 연결", enabled = state.canConnect) { send(MirrorIntent.Connect) }
+            Separator()
+            Item("Layout Inspector…", shortcut = KeyShortcut(Key.I, meta = isMac, ctrl = !isMac, shift = true), onClick = onOpenInspector)
+        }
+    }
+}
+
+/** Layout Inspector 창 메뉴 막대. Inspector 메뉴는 툴바와 같은 일을 한다. */
+@Composable
+fun FrameWindowScope.InspectorMenuBar(holder: InspectorWindowHolder, onCloseWindow: () -> Unit, onOpenSettings: () -> Unit, onQuit: () -> Unit) {
+    val state by holder.viewModel.state.collectAsState()
+    val send = holder.viewModel::onIntent
+    val inspecting = state.phase is InspectorPhase.Inspecting
+    MenuBar {
+        Menu("파일") {
+            Item("창 닫기", shortcut = shortcut(Key.W), onClick = onCloseWindow)
+            if (!isMac) {
+                Separator()
+                Item("설정…", shortcut = shortcut(Key.Comma), onClick = onOpenSettings)
+                Item("종료", shortcut = shortcut(Key.Q), onClick = onQuit)
+            }
+        }
+        Menu("Inspector") {
+            CheckboxItem("실시간 업데이트", checked = state.live, enabled = inspecting) { send(InspectorIntent.ToggleLive) }
+            Item("새로 고침", shortcut = shortcut(Key.R), enabled = inspecting && !state.live) { send(InspectorIntent.Refresh) }
+            Item("Recomposition 초기화", enabled = inspecting && state.composeAvailable) { send(InspectorIntent.ResetCounts) }
+            CheckboxItem("시스템 컴포저블 표시", checked = state.showSystem, enabled = inspecting && state.composeAvailable) { send(InspectorIntent.ToggleSystem) }
         }
     }
 }

@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -74,5 +75,21 @@ class DeviceListTest {
         assertEquals(setOf("A"), vm.state.value.openSerials)
         vm.onIntent(DeviceListIntent.MirrorClosed("A"))
         assertTrue(vm.state.value.openSerials.isEmpty())
+    }
+
+    @Test
+    fun openInspectorOnlyWhereSupported() = runTest {
+        val unsupported = DeviceListViewModel(GetDevicesUseCase(repo))
+        unsupported.onIntent(DeviceListIntent.Select("A"))
+        unsupported.onIntent(DeviceListIntent.OpenInspector)
+        assertFalse(unsupported.state.value.inspectorAvailable)
+
+        val vm = DeviceListViewModel(GetDevicesUseCase(repo), inspector = true)
+        vm.onIntent(DeviceListIntent.OpenInspector) // 선택 전: 아무 일도 없음
+        vm.onIntent(DeviceListIntent.Select("A"))
+        vm.onIntent(DeviceListIntent.OpenInspector)
+        assertEquals(DeviceListEffect.OpenInspector(online), vm.effects.first())
+        assertTrue(vm.state.value.openSerials.isEmpty(), "Inspector 창은 미러링 창 표시와 따로다")
+        assertNull(withTimeoutOrNull(50) { unsupported.effects.first() })
     }
 }

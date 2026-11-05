@@ -32,6 +32,7 @@ kotlin {
             implementation(libs.compose.material3)
         }
         getByName("desktopMain").dependencies {
+            implementation(projects.feature.inspector)
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutines.swing)
         }
@@ -87,7 +88,8 @@ compose.desktop {
             // licenseFile은 두지 않는다. 넣으면 dmg를 열 때마다 동의 창이 뜬다(Apache-2.0은 동의가 필요 없음).
             // suggestRuntimeModules 결과. JavaCPP(FFmpeg)가 jdk.unsupported를 쓴다.
             // jdk.crypto.ec: 업데이트 확인·내려받기의 HTTPS(GitHub ECDSA 인증서)에 필요하다(JDK 21).
-            modules("java.instrument", "java.management", "jdk.unsupported", "jdk.crypto.ec")
+            // java.logging: Layout Inspector의 gRPC(grpc-netty-shaded)가 java.util.logging을 쓴다.
+            modules("java.instrument", "java.management", "jdk.unsupported", "jdk.crypto.ec", "java.logging")
 
             macOS {
                 bundleID = "io.github.eoeo0326.adbmirror"
