@@ -1,5 +1,6 @@
 package io.github.eoeo0326.adbmirror.core.inspector
 
+import io.github.eoeo0326.adbmirror.core.domain.model.InspectorException
 import io.github.eoeo0326.adbmirror.core.domain.model.InspectorFailure
 import io.github.eoeo0326.adbmirror.core.inspector.proto.Transport.AgentData
 import io.github.eoeo0326.adbmirror.core.inspector.proto.Transport.Command

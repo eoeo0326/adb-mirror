@@ -89,6 +89,9 @@ enum class InspectorFailure {
     Disconnected,
 }
 
+/** Layout Inspector 준비·연결 실패. [failure]로 화면 문구를 고른다. */
+class InspectorException(val failure: InspectorFailure, message: String, cause: Throwable? = null) : Exception(message, cause)
+
 sealed interface InspectorEvent {
     data class Progress(val step: InspectorStep) : InspectorEvent
 
