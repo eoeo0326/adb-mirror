@@ -20,6 +20,11 @@ dependencies {
     testImplementation(libs.grpc.inprocess)
 }
 
+// proto 대조(ProtoCompatibilityTest): -Padbmirror.studio=<Android Studio 설치 경로>
+tasks.withType<Test>().configureEach {
+    systemProperty("adbmirror.studio", providers.gradleProperty("adbmirror.studio").getOrElse(""))
+}
+
 // 메시지만 생성한다. gRPC 서비스는 TransportClient에서 MethodDescriptor로 직접 정의해
 // 러너마다 네이티브 gRPC 코드 생성 플러그인을 받지 않는다.
 protobuf {
