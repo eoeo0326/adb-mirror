@@ -23,8 +23,14 @@ dependencies {
 }
 
 // proto 대조(ProtoCompatibilityTest): -Padbmirror.studio=<Android Studio 설치 경로>
+// 실기기 덤프(InspectorDeviceDumpTest): -Padbmirror.device=<serial> -Padbmirror.inspectPackage=<패키지> [-Pinspector.tapAt=x,y]
 tasks.withType<Test>().configureEach {
     systemProperty("adbmirror.studio", providers.gradleProperty("adbmirror.studio").getOrElse(""))
+    systemProperty("adbmirror.device", providers.gradleProperty("adbmirror.device").getOrElse(""))
+    systemProperty("adbmirror.inspectPackage", providers.gradleProperty("adbmirror.inspectPackage").getOrElse(""))
+    systemProperty("inspector.tapAt", providers.gradleProperty("inspector.tapAt").getOrElse(""))
+    systemProperty("inspector.dumpDir", layout.buildDirectory.dir("inspector-dump").get().asFile.absolutePath)
+    testLogging { if (providers.gradleProperty("adbmirror.device").isPresent) showStandardStreams = true }
 }
 
 // 메시지만 생성한다. gRPC 서비스는 TransportClient에서 MethodDescriptor로 직접 정의해
