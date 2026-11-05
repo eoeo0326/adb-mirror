@@ -145,4 +145,14 @@ class TreeMapperTest {
         assertEquals("Text", text.name)
         assertEquals("AndroidView", text.children.single().name, "체인 마지막 노드는 자기 자식을 그대로 가진다")
     }
+
+    @Test
+    fun composablesComeAfterViewChildrenSoTheyAreInFront() {
+        // Compose 1.11처럼 Compose 루트가 창 루트(DecorView)로 오고, 같은 창에 전체 크기 View 형제가 있다.
+        val root = view(1, "com.android.internal.policy", "DecorView", 0, 0, 1080, 2400,
+            view(5, "android.widget", "FrameLayout", 0, 0, 1080, 2400,
+                view(3, "androidx.compose.ui.platform", "AndroidComposeView", 0, 0, 1080, 2400)))
+        val compose = composables(ComposableRoot.newBuilder().setViewId(1).addNodes(composable(-1, "MyScreen", 0, 0, 1080, 2400)).build())
+        assertEquals(listOf("FrameLayout", "MyScreen"), TreeMapper.map(layout(root), compose).children.map { it.name })
+    }
 }

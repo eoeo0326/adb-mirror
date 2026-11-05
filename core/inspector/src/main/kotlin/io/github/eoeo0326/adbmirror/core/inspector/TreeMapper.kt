@@ -12,7 +12,7 @@ import io.github.eoeo0326.adbmirror.core.inspector.proto.view.ViewLayoutInspecti
  * View inspector의 [LayoutEvent](창 하나)와 Compose inspector의 [GetComposablesResponse]를 한 [LayoutNode] 트리로 합친다.
  *
  * - 이름 필드(`int32`)는 각 메시지의 문자열 테이블 id다. 테이블은 이벤트·응답마다 새로 온다.
- * - Compose 노드는 `ComposableRoot.view_id`와 같은 id의 View 자식으로 붙인다. 같은 view_id의 루트가 여럿이면 이어 붙인다
+ * - Compose 노드는 `ComposableRoot.view_id`와 같은 id의 View 자식으로, 그 View의 자식 View 뒤에 붙인다. 같은 view_id의 루트가 여럿이면 이어 붙인다
  *   (Compose 1.11처럼 창 루트 id로 오는 경우가 있다. Android Studio `ComposeViewNodeCreator`와 같다).
  * - `NESTED_SINGLE_CHILDREN` 플래그가 있으면 자식 목록은 단일 자식 체인(c1 → c2 → … → cn)을 펼친 것이라 다시 접는다
  *   (`reduce_child_nesting` 설정의 결과).
@@ -64,7 +64,8 @@ object TreeMapper {
         fun view(node: ViewNode, keepEvenIfSkipped: Boolean = false): List<LayoutNode> {
             val viewChildren = node.childrenList.filter { it.id !in embedded }.flatMap { view(it) }
             val composeChildren = composeRoots[node.id]?.map(::composable).orEmpty()
-            val children = composeChildren + viewChildren
+            // Compose는 호스트 View의 자식 View(AndroidViewsHandler 등) 위에 그려진다. 클릭 판정이 뒤 형제를 앞으로 보므로 뒤에 둔다.
+            val children = viewChildren + composeChildren
             if (node.id in skip && !keepEvenIfSkipped) return children
 
             val className = viewStrings[node.className].orEmpty()
