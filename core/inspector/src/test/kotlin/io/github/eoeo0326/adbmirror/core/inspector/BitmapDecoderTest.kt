@@ -56,7 +56,7 @@ class BitmapDecoderTest {
     @Test
     fun rejectsTruncatedOrUnknownData() {
         assertFailsWith<BitmapDecoder.InvalidBitmapException> { BitmapDecoder.decode(1, bitmap(2, 2, BitmapDecoder.ARGB_8888, 1, 2, 3, 4)) }
-        assertFailsWith<BitmapDecoder.InvalidBitmapException> { BitmapDecoder.decode(1, bitmap(1, 1, 9, 1, 2, 3, 4)) }
+        assertFailsWith<BitmapDecoder.InvalidBitmapException> { BitmapDecoder.decode(1, bitmap(1, 1, 0, 1, 2, 3, 4)) }
         assertFailsWith<BitmapDecoder.InvalidBitmapException> { BitmapDecoder.decode(1, deflate(byteArrayOf(1, 2, 3))) }
         assertFailsWith<BitmapDecoder.InvalidBitmapException> { BitmapDecoder.decode(1, byteArrayOf(1, 2, 3, 4, 5)) }
     }

@@ -8,14 +8,16 @@ import java.util.zip.Inflater
 /**
  * View inspector의 BITMAP 스크린샷을 ARGB로 푼다. Android Studio `ViewAndroidWindow`와 같은 형식이다.
  *
- * deflate로 압축된 바이트를 풀면 `[0..3]` width, `[4..7]` height(little-endian int), `[8]` 형식,
- * `[9..]` 픽셀이다. 형식 이름은 픽셀을 little-endian 정수로 읽었을 때의 비트 배치다
+ * zlib으로 압축된 바이트를 풀면 `[0..3]` width, `[4..7]` height(little-endian int), `[8]` 형식,
+ * `[9..]` 픽셀이다. 형식 값은 Studio `BitmapType`과 같이 1=`RGB_565`, 2=`ABGR_8888`, 3=`ARGB_8888`이고,
+ * 이름은 픽셀을 little-endian 정수로 읽었을 때의 비트 배치다
  * (`ABGR_8888`이면 메모리에 R,G,B,A 순서 — Android `Bitmap.Config.ARGB_8888`의 메모리 배치).
+ * 실시간(continuous) fetch일 때만 BITMAP이 오고, 한 번 받기(continuous=false)는 SKP가 온다.
  */
 object BitmapDecoder {
-    const val RGB_565: Int = 0
-    const val ABGR_8888: Int = 1
-    const val ARGB_8888: Int = 2
+    const val RGB_565: Int = 1
+    const val ABGR_8888: Int = 2
+    const val ARGB_8888: Int = 3
 
     private const val HEADER = 9
 
