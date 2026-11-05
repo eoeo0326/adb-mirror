@@ -1,0 +1,82 @@
+// AOSP tools/base/dynamic-layout-inspector/agent/appinspection/proto (Apache-2.0)의 View inspector 프로토콜을 줄였다.
+// LayoutEvent.configuration은 쓰지 않아 bytes로, ProgressEvent.checkpoint는 enum 대신 int32로 받는다(와이어 형식이 같다).
+syntax = "proto3";
+package layoutinspector.view.inspection;
+option java_package = "io.github.eoeo0326.adbmirror.core.inspector.proto.view";
+
+message StringEntry { int32 id = 1; string str = 2; }
+message Point { int32 x = 1; int32 y = 2; }
+message Rect { int32 x = 1; int32 y = 2; int32 w = 3; int32 h = 4; }
+message Quad { sint32 x0 = 1; sint32 y0 = 2; sint32 x1 = 3; sint32 y1 = 4; sint32 x2 = 5; sint32 y2 = 6; sint32 x3 = 7; sint32 y3 = 8; }
+message Bounds { Rect layout = 1; Quad render = 2; }
+message Resource { int32 type = 1; int32 namespace = 2; int32 name = 3; }
+message ViewNode {
+  enum Flag { NONE = 0; IS_WEBVIEW = 1; }
+  int64 id = 1; repeated ViewNode children = 2; Resource resource = 3;
+  int32 package_name = 4; int32 class_name = 5; Bounds bounds = 6;
+  Resource layout_resource = 7; int32 layout_flags = 8; int32 flags = 9; int32 text_value = 101;
+}
+message Screenshot { enum Type { UNKNOWN = 0; NONE = 1; SKP = 2; BITMAP = 3; } Type type = 1; bytes bytes = 2; }
+message Display { int32 id = 1; int32 width = 2; int32 height = 3; int32 orientation = 4; }
+message AppContext { Resource theme = 1; repeated Display display_info = 2; }
+message FlagValue { repeated int32 flag = 1; }
+message Property {
+  enum Type { UNSPECIFIED = 0; STRING = 1; BOOLEAN = 2; BYTE = 3; CHAR = 4; DOUBLE = 5; FLOAT = 6; INT16 = 7; INT32 = 8; INT64 = 9;
+    OBJECT = 10; COLOR = 11; GRAVITY = 12; INT_ENUM = 13; INT_FLAG = 14; RESOURCE = 15; DRAWABLE = 16; ANIM = 17;
+    ANIMATOR = 18; INTERPOLATOR = 19; DIMENSION = 20; }
+  Type type = 1; int32 name = 2; Resource source = 3; repeated Resource resolution_stack = 4;
+  bool is_layout = 5; int32 namespace = 6;
+  oneof value { int32 int32_value = 101; int64 int64_value = 102; double double_value = 103; float float_value = 104;
+    Resource resource_value = 105; FlagValue flag_value = 106; }
+}
+message PropertyGroup { int64 view_id = 1; Resource layout = 2; repeated Property property = 3; }
+enum ErrorCode { UNKNOWN_ERROR_CODE = 0; NO_HARDWARE_ACCELERATION = 1; NO_ROOT_VIEWS_FOUND = 2; }
+
+message StartFetchCommand { bool continuous = 1; }
+message StartFetchResponse { string error = 1; ErrorCode code = 2; }
+message StopFetchCommand {}
+message StopFetchResponse {}
+message GetPropertiesCommand { int64 root_view_id = 1; int64 view_id = 2; }
+message GetPropertiesResponse { repeated StringEntry strings = 1; PropertyGroup property_group = 2; }
+message UpdateScreenshotTypeCommand { Screenshot.Type type = 1; float scale = 2; }
+message UpdateScreenshotTypeResponse {}
+message EnableBitmapScreenshotCommand { bool enable = 1; }
+message EnableBitmapScreenshotResponse {}
+
+message ProgressEvent { int32 checkpoint = 1; }
+message RootView { ViewNode node = 1; Point offset = 2; int32 display_id = 3; }
+message LayoutEvent {
+  repeated StringEntry strings = 1; AppContext app_context = 2; bytes configuration = 3;
+  RootView root_view = 4; Screenshot screenshot = 5; bool is_xr = 6;
+}
+message WindowRootsEvent { repeated int64 ids = 1; }
+message PropertiesEvent { int64 root_id = 1; repeated StringEntry strings = 2; repeated PropertyGroup property_groups = 3; }
+message ErrorEvent { string message = 1; }
+
+message Command {
+  oneof specialized {
+    StartFetchCommand start_fetch_command = 1;
+    StopFetchCommand stop_fetch_command = 2;
+    GetPropertiesCommand get_properties_command = 3;
+    UpdateScreenshotTypeCommand update_screenshot_type_command = 4;
+    EnableBitmapScreenshotCommand enable_bitmap_screenshot_command = 6;
+  }
+}
+message Response {
+  oneof specialized {
+    StartFetchResponse start_fetch_response = 1;
+    StopFetchResponse stop_fetch_response = 2;
+    GetPropertiesResponse get_properties_response = 3;
+    UpdateScreenshotTypeResponse update_screenshot_type_response = 4;
+    EnableBitmapScreenshotResponse enable_bitmap_screenshot_response = 6;
+  }
+}
+message Event {
+  oneof specialized {
+    ErrorEvent error_event = 1;
+    WindowRootsEvent roots_event = 2;
+    LayoutEvent layout_event = 3;
+    PropertiesEvent properties_event = 4;
+    ProgressEvent progress_event = 5;
+  }
+}

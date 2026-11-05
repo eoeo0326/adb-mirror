@@ -24,6 +24,7 @@ include(
     ":core:domain",
     ":core:adb",
     ":core:data",
+    ":core:inspector",
     ":feature:mirror",
     ":composeApp",
     ":androidApp",
