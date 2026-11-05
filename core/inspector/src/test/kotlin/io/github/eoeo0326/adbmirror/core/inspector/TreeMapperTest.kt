@@ -122,4 +122,27 @@ class TreeMapperTest {
         val compose = composables(ComposableRoot.newBuilder().setViewId(99).addViewsToSkip(1).build())
         assertEquals(1L, TreeMapper.map(layout(root), compose).id)
     }
+
+    @Test
+    fun concatenatesRootsSharingViewIdAndUnfoldsNestedSingleChildren() {
+        // Compose 1.11처럼 ComposableRoot 둘이 모두 창 루트 id로 오고, reduce_child_nesting으로 체인이 펼쳐져 온다.
+        val root = view(1, "com.android.internal.policy", "DecorView", 0, 0, 1080, 2400)
+        val compose = composables(
+            ComposableRoot.newBuilder().setViewId(1).addNodes(
+                composable(-1, "MyScreen", 0, 0, 1080, 2400,
+                    composable(-2, "Layout", 0, 0, 1080, 2400),
+                    composable(-3, "Text", 0, 0, 100, 40, composable(-4, "AndroidView", 0, 0, 10, 10)),
+                    flags = 16),
+            ).build(),
+            ComposableRoot.newBuilder().setViewId(1).addNodes(composable(-9, "Text", 0, 0, 1, 1)).build(),
+        )
+        val tree = TreeMapper.map(layout(root), compose)
+        assertEquals(listOf("MyScreen", "Text"), tree.children.map { it.name }, "같은 view_id 루트는 이어 붙인다")
+        val screen = tree.children[0]
+        val layoutNode = screen.children.single()
+        assertEquals("Layout", layoutNode.name)
+        val text = layoutNode.children.single()
+        assertEquals("Text", text.name)
+        assertEquals("AndroidView", text.children.single().name, "체인 마지막 노드는 자기 자식을 그대로 가진다")
+    }
 }
