@@ -9,6 +9,7 @@ kotlin {
 }
 
 dependencies {
+    api(projects.core.domain)
     implementation(libs.kotlinx.coroutines.core)
     api(libs.protobuf.kotlin)
     implementation(libs.grpc.protobuf)
