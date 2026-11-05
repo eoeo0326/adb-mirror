@@ -26,6 +26,7 @@ include(
     ":core:data",
     ":core:inspector",
     ":feature:mirror",
+    ":feature:inspector",
     ":composeApp",
     ":androidApp",
 )
