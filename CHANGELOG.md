@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### 추가
+- Desktop: Layout Inspector 창을 추가한다. 기기의 debuggable 앱(Android 10 이상)을 골라 View·Compose 트리, 화면 위 노드 선택, 속성·파라미터, Recomposition·Skip 횟수를 본다. 미러링 창 「기기」 메뉴(⌘⇧I)나 기기 목록의 [Layout Inspector]로 열고, 창을 닫으면 기기 쪽 데몬·adb forward·설정을 정리한다
+- Desktop: 설정에 Android Studio 위치를 둔다. Layout Inspector는 설치된 Android Studio의 transport·에이전트·inspector 파일을 기기에 올려 쓴다(비우면 최신 설치를 찾는다)
+
+### 알려진 제한
+- Layout Inspector는 Android Studio가 설치돼 있어야 하고, Compose 정보는 처음 볼 때 앱의 Compose 버전에 맞는 inspector를 내려받는다
+- Layout Inspector의 3D 보기·스냅숏 저장·State read 추적은 아직 없다
+
 ## [0.8.1] - 2026-10-23
 
 Desktop 앱 업데이트 릴리즈입니다. 설정에서 새 버전을 확인하고, 앱이 직접 내려받아 설치합니다. 0.8.0 이하에는 이 기능이 없어 0.8.1은 Releases에서 직접 받아 설치해야 하고, 그다음 버전부터 앱 안에서 업데이트할 수 있습니다.
