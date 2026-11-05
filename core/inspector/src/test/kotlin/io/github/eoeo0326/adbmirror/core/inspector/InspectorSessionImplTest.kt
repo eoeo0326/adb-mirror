@@ -261,9 +261,8 @@ class InspectorSessionImplTest {
 
     @Test
     fun resendsDefaultSettingsWhenInspectorDoesNotKnowThem() = runBlocking {
-        val s = session()
         compose.unknownSettings = true
-        s.updateSettings(compose)
+        compose.applySettings()
         assertEquals(listOf("settings(keep=false,reduce=true)", "settings(keep=false,reduce=false)"), log.toList())
     }
 

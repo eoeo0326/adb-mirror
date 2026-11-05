@@ -31,3 +31,14 @@ interface ComposeInspection {
     suspend fun parameters(rootViewId: Long, composableId: Long, anchorHash: Int, skipSystem: Boolean, generation: Int): ComposeLayoutInspection.Response
     suspend fun dispose()
 }
+
+/**
+ * Recomposition 횟수를 켜고(누적값은 0으로) 설정을 보낸다. 오래된 inspector가 모르는 설정이면
+ * (`unknown_command_response`) 기본 설정으로 다시 보낸다.
+ */
+suspend fun ComposeInspection.applySettings() {
+    val response = updateSettings()
+    if (response.hasUnknownCommandResponse()) {
+        updateSettings(includeRecomposeCounts = true, keepRecomposeCounts = false, delayParameterExtractions = false, reduceChildNesting = false)
+    }
+}

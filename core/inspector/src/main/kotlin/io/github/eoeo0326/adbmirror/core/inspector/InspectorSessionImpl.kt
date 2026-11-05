@@ -216,17 +216,9 @@ class InspectorSessionImpl(
 
     override suspend fun resetRecompositionCounts() {
         val c = compose ?: return
-        updateSettings(c)
+        c.applySettings()
         lock.withLock { forceFull = true }
         signal.trySend(Unit)
-    }
-
-    /** 오래된 inspector가 모르는 설정이면(`unknown_command_response`) 기본 설정으로 다시 보낸다. */
-    internal suspend fun updateSettings(c: ComposeInspection) {
-        val response = c.updateSettings()
-        if (response.hasUnknownCommandResponse()) {
-            c.updateSettings(includeRecomposeCounts = true, keepRecomposeCounts = false, delayParameterExtractions = false, reduceChildNesting = false)
-        }
     }
 
     override suspend fun setShowSystemComposables(show: Boolean) {
