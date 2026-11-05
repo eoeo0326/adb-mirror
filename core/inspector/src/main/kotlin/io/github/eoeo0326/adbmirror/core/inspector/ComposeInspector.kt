@@ -14,18 +14,18 @@ import kotlinx.coroutines.flow.mapNotNull
  * 앱의 Compose UI 버전에 맞춰 내려받은 Compose inspector(`layoutinspector.compose.inspection`) 프로토콜 래퍼.
  * 오래된 inspector는 모르는 명령에 `unknown_command_response`로 답한다. 호출 쪽이 [ComposeLayoutInspection.Response.hasUnknownCommandResponse]로 확인한다.
  */
-class ComposeInspector(private val client: AppInspectionClient) {
-    val disposals: Flow<String> = client.events.mapNotNull { e -> (e as? InspectorRawEvent.Disposed)?.takeIf { it.inspectorId == ID }?.errorMessage }
+class ComposeInspector(private val client: AppInspectionClient) : ComposeInspection {
+    override val disposals: Flow<String> = client.events.mapNotNull { e -> (e as? InspectorRawEvent.Disposed)?.takeIf { it.inspectorId == ID }?.errorMessage }
 
     /** 만들지 못하면 상태를 돌려준다(`VERSION_INCOMPATIBLE`·`LIBRARY_MISSING`·`APP_PROGUARDED` …). */
     suspend fun create(dexPath: String, minLibrary: LibraryCompatibility): CreateInspectorResponse.Status =
         client.createInspector(ID, dexPath, minLibrary)
 
-    suspend fun updateSettings(
-        includeRecomposeCounts: Boolean = true,
-        keepRecomposeCounts: Boolean = false,
-        delayParameterExtractions: Boolean = true,
-        reduceChildNesting: Boolean = true,
+    override suspend fun updateSettings(
+        includeRecomposeCounts: Boolean,
+        keepRecomposeCounts: Boolean,
+        delayParameterExtractions: Boolean,
+        reduceChildNesting: Boolean,
     ): ComposeLayoutInspection.Response = command {
         setUpdateSettingsCommand(
             UpdateSettingsCommand.newBuilder()
@@ -36,7 +36,7 @@ class ComposeInspector(private val client: AppInspectionClient) {
         )
     }
 
-    suspend fun composables(rootViewId: Long, skipSystem: Boolean, generation: Int, allowEmptyIfUnchanged: Boolean = true): ComposeLayoutInspection.Response =
+    override suspend fun composables(rootViewId: Long, skipSystem: Boolean, generation: Int, allowEmptyIfUnchanged: Boolean): ComposeLayoutInspection.Response =
         command {
             setGetComposablesCommand(
                 GetComposablesCommand.newBuilder().setRootViewId(rootViewId).setSkipSystemComposables(skipSystem)
@@ -44,7 +44,7 @@ class ComposeInspector(private val client: AppInspectionClient) {
             )
         }
 
-    suspend fun parameters(rootViewId: Long, composableId: Long, anchorHash: Int, skipSystem: Boolean, generation: Int): ComposeLayoutInspection.Response =
+    override suspend fun parameters(rootViewId: Long, composableId: Long, anchorHash: Int, skipSystem: Boolean, generation: Int): ComposeLayoutInspection.Response =
         command {
             setGetParametersCommand(
                 GetParametersCommand.newBuilder().setRootViewId(rootViewId).setComposableId(composableId).setAnchorHash(anchorHash)
@@ -67,7 +67,7 @@ class ComposeInspector(private val client: AppInspectionClient) {
         )
     }
 
-    suspend fun dispose() = client.disposeInspector(ID)
+    override suspend fun dispose() = client.disposeInspector(ID)
 
     private suspend fun command(fill: ComposeLayoutInspection.Command.Builder.() -> Unit): ComposeLayoutInspection.Response {
         val bytes = client.raw(ID, ComposeLayoutInspection.Command.newBuilder().apply(fill).build().toByteArray())
