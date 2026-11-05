@@ -136,6 +136,11 @@ private fun ApplicationScope.DesktopApp(graph: AppGraph, platform: SettingsPlatf
                 existing.focusRequest.intValue++
             } else {
                 closingWindows["inspector:$serial"]?.join()
+                // 기다리는 동안 같은 기기 요청이 먼저 창을 만들었으면 그 창을 쓴다(두 번 만들면 앞 창의 연결이 정리되지 않는다).
+                inspectorWindows[serial]?.let {
+                    it.focusRequest.intValue++
+                    return@launch
+                }
                 val state = restoredWindowState(windowBounds, "inspector.$serial", INSPECTOR_WINDOW_SIZE, rememberSize = true)
                 inspectorWindows[serial] = InspectorWindowHolder(device, graph, state)
             }
