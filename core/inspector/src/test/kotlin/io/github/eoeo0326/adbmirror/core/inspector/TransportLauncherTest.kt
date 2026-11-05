@@ -4,6 +4,7 @@ import io.github.eoeo0326.adbmirror.core.domain.model.InspectorFailure
 import io.github.eoeo0326.adbmirror.core.inspector.proto.Transport.AgentData
 import io.github.eoeo0326.adbmirror.core.inspector.proto.Transport.Command
 import io.github.eoeo0326.adbmirror.core.inspector.proto.Transport.Event
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
@@ -33,8 +34,7 @@ class TransportLauncherTest {
     fun startsDaemonPushesFilesAndCleansUpInOrder() = runBlocking {
         val shell = FakeDeviceShell()
         val connection = launcher(shell).launch("S1", install)
-        assertEquals(42L, connection.deviceId)
-        assertEquals("fake-1", connection.daemonVersion)
+        assertEquals(TransportLauncher.deviceId("S1", "boot-1"), connection.deviceId)
         assertFalse(connection.reusedDaemon)
         assertEquals(listOf("arm64-v8a", "armeabi-v7a"), connection.abis)
         assertTrue("start /data/local/tmp/perfd/transport -config_file=/data/local/tmp/perfd/daemon.config" in shell.calls)
@@ -46,6 +46,8 @@ class TransportLauncherTest {
             shell.pushed.toSet(),
         )
         assertEquals(1, shell.forwardsOpen.get())
+        assertTrue("shell rm -f ${DeviceFiles.VIEW_INSPECTOR_JAR}" in shell.calls, "읽기 전용 jar 위로 push하지 않는다")
+        assertTrue(shell.calls.any { it.startsWith("shell chmod 755 ${DeviceFiles.DAEMON}; chmod 444 ") && DeviceFiles.VIEW_INSPECTOR_JAR in it && DeviceFiles.PERFA_JAR in it })
 
         connection.close()
         connection.close()
@@ -113,6 +115,35 @@ class TransportLauncherTest {
         ) { e -> e.agentData.status.takeIf { e.kind == Event.Kind.AGENT && e.pid == 77 } }
         assertEquals(AgentData.Status.ATTACHED, status)
         assertEquals(1, server.streams.get())
+        connection.close()
+    }
+
+    @Test
+    fun failsAsDisconnectedWhenDaemonUnreachableAndRollsBack() = runBlocking {
+        val shell = FakeDeviceShell()
+        // 아무도 듣지 않는 in-process 이름이면 UNAVAILABLE이다(UNIMPLEMENTED만 연결된 것으로 본다).
+        val nowhere = { _: Int -> io.grpc.inprocess.InProcessChannelBuilder.forName("nowhere-${System.nanoTime()}").build() }
+        val e = assertFailsWith<InspectorException> { TransportLauncher(shell, channelFactory = nowhere).launch("S1", install) }
+        assertEquals(InspectorFailure.Disconnected, e.failure)
+        assertEquals(0, shell.forwardsOpen.get())
+        assertEquals(1, shell.daemonStops.get())
+    }
+
+    @Test
+    fun attachAgentResolvesFromEarlierEventWhenAlreadyAttached() = runBlocking {
+        // 스트림을 열자마자 이전 이벤트로 ATTACHED가 오고, 다시 attach해도 새 이벤트는 없다.
+        val connection = launcher(FakeDeviceShell()).launch("S1", install)
+        withTimeout(5_000) { server.subscribed.await() }
+        server.events.emit(Event.newBuilder().setKind(Event.Kind.AGENT).setPid(55).setAgentData(AgentData.newBuilder().setStatus(AgentData.Status.ATTACHED)).build())
+        withTimeout(5_000) { connection.client.agents.first { 55 in it } }
+        val status = connection.client.attachAgent(connection.deviceId, 55, "com.example", "arm64", timeoutMs = 1_000)
+        assertEquals(AgentData.Status.ATTACHED, status)
+        val sent = server.commands.single()
+        assertEquals("libjvmtiagent_arm64.so", sent.attachAgent.agentLibFileName)
+        assertEquals(DeviceFiles.AGENT_CONFIG, sent.attachAgent.agentConfigPath)
+        assertEquals("com.example", sent.attachAgent.packageName)
+        // 아무 소식이 없으면 UNSPECIFIED.
+        assertEquals(AgentData.Status.UNSPECIFIED, connection.client.attachAgent(connection.deviceId, 66, "x", "arm64", timeoutMs = 200))
         connection.close()
     }
 }

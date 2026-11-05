@@ -23,13 +23,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** transport 데몬에 이어진 연결 하나. [close]가 채널·forward·(우리가 띄운) 데몬을 정리한다. */
 class TransportConnection internal constructor(
     val serial: String,
+    /** `Command.stream_id`에 쓰는 기기 id. serial·boot id로 만든다. */
     val deviceId: Long,
     val apiLevel: Int,
     /** 기기가 지원하는 ABI(기기 순서). */
     val abis: List<String>,
     val client: TransportClient,
-    /** 데몬 버전. 재사용한 데몬이면 Studio 파일과 다를 수 있다. */
-    val daemonVersion: String,
     /** 이미 돌던 데몬(예: Android Studio가 띄운 것)을 함께 쓰는지. 그렇다면 닫을 때 끄지 않는다. */
     val reusedDaemon: Boolean,
     private val cleanup: suspend () -> Unit,
@@ -45,7 +44,7 @@ class TransportConnection internal constructor(
 
 /**
  * Android Studio 파일을 기기에 올리고 transport 데몬을 띄워 gRPC로 붙는다.
- * 순서: API 확인 → ABI → push(같은 sha면 건너뜀) → 데몬 재사용·기동 → forward → 채널 → 버전·기기 확인.
+ * 순서: API 확인 → ABI → push(같은 sha면 건너뜀) → 데몬 재사용·기동 → forward → 채널 → 연결 확인.
  * 중간에 실패하거나 취소되면 그때까지 연 것을 되돌린다.
  */
 class TransportLauncher(
@@ -89,16 +88,16 @@ class TransportLauncher(
             val client = TransportClient(channel, scope)
             undo += { client.close(); scope.cancel() }
 
-            val version = client.version()
-            val devices = client.devices()
-            val device = devices.firstOrNull { it.serial == serial } ?: devices.firstOrNull()
-                ?: throw InspectorException(InspectorFailure.Disconnected, "transport가 기기를 보고하지 않았습니다")
-            val expected = install.buildNumber
-            if (reused) log("데몬 버전 $version (Studio 파일 $expected)")
+            try {
+                client.ping()
+            } catch (e: Exception) {
+                throw InspectorException(InspectorFailure.Disconnected, "transport 데몬에 연결하지 못했습니다: ${e.message}", e)
+            }
+            val bootId = shell.shell(serial, "cat /proc/sys/kernel/random/boot_id").trim()
 
             val steps = undo.toList()
             undo.clear()
-            return TransportConnection(serial, device.deviceId, api, abis, client, version, reused) {
+            return TransportConnection(serial, deviceId(serial, bootId), api, abis, client, reused) {
                 // 정리 순서: 이벤트 스트림 → 채널 → forward → 데몬(우리가 띄운 것만).
                 steps.asReversed().forEach { runCatching { it() } }
             }
@@ -147,13 +146,16 @@ class TransportLauncher(
         val remote = parseSha256(shell.shell(serial, "sha256sum ${files.joinToString(" ") { it.second }} 2>/dev/null || true"))
         files.forEach { (upload, path) ->
             if (remote[path] == upload.sha256()) return@forEach
-            when (upload) {
-                is Upload.Local -> shell.push(serial, upload.file, path)
-                is Upload.Bytes -> shell.push(serial, upload.data, path)
+            when {
+                upload is Upload.Local && path.endsWith(".jar") -> shell.pushDex(serial, upload.file, path)
+                upload is Upload.Local -> shell.push(serial, upload.file, path)
+                upload is Upload.Bytes -> shell.push(serial, upload.data, path)
             }
             log("push $path")
         }
-        shell.shell(serial, "chmod 755 ${DeviceFiles.DAEMON}")
+        // 예전에 쓰기 가능으로 올린 jar가 남아 있어도 dex로 로드되도록 읽기 전용으로 맞춘다.
+        val jars = files.map { it.second }.filter { it.endsWith(".jar") }
+        shell.shell(serial, "chmod 755 ${DeviceFiles.DAEMON}; chmod 444 ${jars.joinToString(" ")}")
     }
 
     private sealed interface Upload {
@@ -176,6 +178,12 @@ class TransportLauncher(
 
         fun defaultChannel(port: Int): ManagedChannel =
             ManagedChannelBuilder.forAddress("127.0.0.1", port).usePlaintext().maxInboundMessageSize(MAX_MESSAGE_BYTES).build()
+
+        /** 기기 id. Android Studio처럼 serial과 boot id의 SHA-256으로 만든다(앞 8바이트). 데몬은 이 값을 명령의 stream id로만 쓴다. */
+        internal fun deviceId(serial: String, bootId: String): Long {
+            val digest = MessageDigest.getInstance("SHA-256").digest((serial + bootId).toByteArray())
+            return digest.take(8).fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xff) }
+        }
 
         internal fun sha256Hex(bytes: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
