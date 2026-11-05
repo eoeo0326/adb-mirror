@@ -14,10 +14,12 @@ adb로 연결한 Android 기기 화면을 데스크톱·폰·브라우저에 띄
 - **터치:** 클릭은 탭으로, 드래그는 스와이프로 기기에 전달됩니다. "보기 전용"을 켜면 보기만 합니다.
 - **스크린샷:** 기기 원본 해상도 PNG로 찍습니다. ⌘C(Windows·Linux는 Ctrl+C)로 클립보드에 복사하고, ⌘S로 파일에 저장합니다.
 - **정리:** 창을 닫으면 adb forward와 기기 쪽 서버를 자동으로 정리합니다.
+- **Layout Inspector (Desktop):** debug 앱의 View·Compose 트리, 속성·파라미터, Recomposition·Skip 횟수를 Android Studio Layout Inspector처럼 봅니다. 화면을 클릭하면 그 자리의 노드를 고르고, 앱을 조작하면 횟수가 늘어난 행이 잠깐 칠해집니다. 미러링 창 「기기」 메뉴(⌘⇧I)나 기기 목록의 [Layout Inspector]로 엽니다.
 
 ## 요구사항
 
 - Desktop: adb가 필요합니다. `PATH`, `ANDROID_HOME`/`ANDROID_SDK_ROOT`, `~/Library/Android/sdk` 순서로 찾고, 설정에서 경로를 직접 지정할 수도 있습니다.
+- Layout Inspector(Desktop): Android Studio가 설치돼 있어야 합니다. 기기에 올릴 transport 데몬·에이전트·View inspector를 설치된 Android Studio에서 가져오며(레포·배포물에는 들어 있지 않음), 기본 위치에서 최신 설치를 찾고 설정 > Android Studio에서 지정할 수도 있습니다. 대상 앱은 debuggable이고 기기는 Android 10(API 29) 이상이어야 합니다. Compose 정보는 앱의 Compose UI 버전에 맞는 inspector를 처음 볼 때 Google Maven에서 내려받습니다.
 - Android 앱: 미러링할 기기가 무선 디버깅(Android 11 이상)을 지원해야 합니다.
 - Web 앱: Chrome·Edge 같은 Chromium 브라우저(WebUSB)가 필요합니다.
 - 미러링할 기기는 Android 5.0 이상이고 USB(또는 무선) 디버깅이 켜져 있어야 합니다.
@@ -34,6 +36,9 @@ Kotlin Multiplatform + Compose Multiplatform 버전입니다. Desktop에서 기�
 ./gradlew :composeApp:wasmJsBrowserDevelopmentRun # Web
 ./gradlew allTests                                # 공통 테스트
 ./gradlew :core:data:jvmTest -Padbmirror.device=<serial>  # 실기기 통합 테스트
+./gradlew :core:inspector:test -Padbmirror.device=<serial> -Padbmirror.inspectPackage=<패키지>  # Layout Inspector 실기기 확인
+./gradlew :core:inspector:test -Padbmirror.studio=<Android Studio 경로>  # proto와 Studio 일치 확인
+ADB_MIRROR_DEV_INSPECT=<serial> ./gradlew :composeApp:run  # 그 기기의 Layout Inspector 창을 바로 열기
 ADB_MIRROR_STATS=1 ./gradlew :composeApp:run      # 초당 디코딩 프레임 수 출력
 ADB_MIRROR_HWDECODE=0 ./gradlew :composeApp:run   # 하드웨어 디코딩 끄기(비교·문제 확인용)
 ADB_MIRROR_GPU_YUV=0 ./gradlew :composeApp:run    # GPU YUV 그리기 끄기(BGRA로 그림)
@@ -152,7 +157,9 @@ macOS 서명·공증은 저장소 Secrets에 아래 값이 있을 때만 합니�
 core/domain      모델 · Repository 인터페이스 · UseCase (순수 Kotlin)
 core/adb         AdbTransport 인터페이스와 플랫폼별 구현
 core/data        scrcpy 프로토콜 · Repository 구현
+core/inspector   Layout Inspector transport·App Inspection 클라이언트 (Desktop, gRPC)
 feature/mirror   MVI 화면 (Compose)
+feature/inspector Layout Inspector 창 (Desktop)
 composeApp       공유 앱 + Desktop · Web 진입점
 androidApp       Android 앱 진입점
 scripts/         fixture 캡처, CPU 측정, 아이콘 빌드 등 보조 스크립트
@@ -167,7 +174,8 @@ macOS는 ⌘, Windows·Linux는 Ctrl을 씁니다.
 |---|---|
 | ⌘C | 스크린샷을 클립보드에 PNG로 복사 |
 | ⌘S | 스크린샷을 파일로 저장 |
-| ⌘R | 녹화 시작·정지 |
+| ⌘R | 녹화 시작·정지 (Layout Inspector 창: 새로 고침) |
+| ⌘⇧I | 미러링 창에서 Layout Inspector 창 열기 |
 | ⌘W | 창 닫기 |
 | ⌘Q | 종료 |
 
