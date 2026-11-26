@@ -6,7 +6,6 @@ import java.io.File
 import javax.imageio.ImageIO
 import kotlin.random.Random
 import kotlin.test.Test
-import kotlin.test.assertContentEquals
 
 /** 실제 화면 캡처를 스크롤한 프레임(화면 전체가 바뀌는 가장 무거운 경우)에서 참조 구현과 출력이 같은지 본다. */
 class GifCodecFixtureTest {
@@ -40,12 +39,9 @@ class GifCodecFixtureTest {
         for (width in listOf(480, 720)) {
             val frames = scrollingFrames(width, 6)
             for (dither in listOf(false, true)) frames.forEachIndexed { k, f ->
-                val where = "너비 $width, 프레임 $k, dither=$dither"
-                val expected = ReferenceColorQuantizer.quantize(f, dither = dither)
-                val actual = quantizer.quantize(f, dither = dither)
-                assertContentEquals(expected.palette, actual.palette, "팔레트: $where")
-                assertContentEquals(expected.indices, actual.indices, "인덱스: $where")
-                assertContentEquals(ReferenceGifLzw.encode(expected.indices), lzw.encode(actual.indices), "LZW: $where")
+                val where = "너비 $width, 프레임 $k"
+                val q = assertQuantizeMatchesReference(quantizer, where, f, dither = dither)
+                assertLzwMatchesReference(lzw, "$where, dither=$dither", q.indices)
             }
         }
     }
