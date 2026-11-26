@@ -12,7 +12,7 @@ import kotlin.test.assertContentEquals
 class GifCodecFixtureTest {
     private val fixtures = File(System.getProperty("fixtures.dir") ?: error("fixtures.dir 시스템 속성이 없습니다"))
     private val quantizer = ColorQuantizer
-    private val lzw = GifLzw
+    private val lzw = GifLzw()
 
     /** fixture 화면을 [width] 너비로 줄이고, 프레임마다 12줄씩 스크롤하며 파란 채널에 ±1 잡음을 얹는다. */
     private fun scrollingFrames(width: Int, count: Int): List<RgbaFrame> {

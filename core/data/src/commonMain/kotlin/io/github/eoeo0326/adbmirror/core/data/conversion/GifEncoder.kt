@@ -32,6 +32,8 @@ class GifEncoder(
     /** 지금까지 쓴 이미지를 겹친 결과(보는 사람에게 보이는 화면). 첫 프레임을 쓰기 전에는 null. */
     private var canvas: IntArray? = null
 
+    private val lzw = GifLzw()
+
     init {
         require(width in 1..0xFFFF && height in 1..0xFFFF) { "GIF 크기 범위 초과: ${width}x$height" }
         require(loopCount in 0..0xFFFF)
@@ -90,7 +92,7 @@ class GifEncoder(
             out.u8((c ushr 16) and 0xFF); out.u8((c ushr 8) and 0xFF); out.u8(c and 0xFF)
         }
         out.u8(8) // LZW 최소 코드 크기
-        out.bytes(GifLzw.encode(q.indices, 8))
+        out.bytes(lzw.encode(q.indices, 8))
         frames++
     }
 

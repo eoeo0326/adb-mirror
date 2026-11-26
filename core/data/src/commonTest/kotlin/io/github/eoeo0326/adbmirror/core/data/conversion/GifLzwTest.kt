@@ -57,7 +57,7 @@ class GifLzwTest {
     @Test
     fun roundTripsSmallInput() {
         val input = byteArrayOf(1, 1, 1, 2, 2, 1, 1, 1, 3)
-        assertContentEquals(input, decode(GifLzw.encode(input)))
+        assertContentEquals(input, decode(GifLzw().encode(input)))
     }
 
     @Test
@@ -65,17 +65,17 @@ class GifLzwTest {
         val input = ByteArray(200_000) { Random(7).nextInt(0, 256).toByte() }
         val random = Random(42)
         for (i in input.indices) input[i] = random.nextInt(0, 256).toByte()
-        assertContentEquals(input, decode(GifLzw.encode(input)))
+        assertContentEquals(input, decode(GifLzw().encode(input)))
     }
 
     @Test
     fun roundTripsRepetitiveInput() {
         val input = ByteArray(100_000) { (it / 1000 % 5).toByte() }
-        assertContentEquals(input, decode(GifLzw.encode(input)))
+        assertContentEquals(input, decode(GifLzw().encode(input)))
     }
 
     @Test
     fun emptyInput() {
-        assertContentEquals(ByteArray(0), decode(GifLzw.encode(ByteArray(0))))
+        assertContentEquals(ByteArray(0), decode(GifLzw().encode(ByteArray(0))))
     }
 }

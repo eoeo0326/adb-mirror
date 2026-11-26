@@ -8,7 +8,7 @@ import kotlin.test.assertContentEquals
 class GifCodecEquivalenceTest {
     // 한 인스턴스로 모든 입력을 이어서 돌린다. 앞 입력의 작업 버퍼 상태가 남으면 뒤 입력에서 드러난다.
     private val quantizer = ColorQuantizer
-    private val lzw = GifLzw
+    private val lzw = GifLzw()
 
     private fun frame(w: Int, h: Int, argb: (Int) -> Int) = RgbaFrame(w, h, IntArray(w * h, argb))
 
