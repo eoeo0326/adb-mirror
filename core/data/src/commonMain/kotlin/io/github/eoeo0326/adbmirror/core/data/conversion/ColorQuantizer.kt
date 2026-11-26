@@ -14,7 +14,11 @@ internal class ColorQuantizer {
     private var sorted = IntArray(0)
     private val count = IntArray(257)
 
+    /** 24비트 색마다 1비트. 샘플에서 처음 나온 색을 가린다. 쓰고 나면 켠 비트를 모두 끈다. */
+    private val seen = LongArray((1 shl 24) / 64)
+
     fun quantize(frame: RgbaFrame, maxColors: Int = 256, dither: Boolean = false): Result {
+        require(maxColors >= 1) { "maxColors는 1 이상이어야 한다: $maxColors" }
         val palette = buildPalette(frame.pixels, maxColors)
         val map = NearestColor(palette)
         val indices = if (dither) ditherIndices(frame, palette, map) else ByteArray(frame.pixels.size) { map.index(frame.pixels[it]).toByte() }
@@ -30,8 +34,7 @@ internal class ColorQuantizer {
         }
         val sample = sample
         for (i in 0 until n) sample[i] = pixels[i * stride] and 0xFFFFFF
-        val distinct = LinkedHashSet<Int>().apply { for (i in 0 until n) add(sample[i]) }
-        if (distinct.size <= maxColors) return distinct.toIntArray()
+        distinctColors(sample, n, maxColors)?.let { return it }
 
         // 상자는 sample의 [start, end) 구간이다. 고른 상자는 목록에서 빼고 두 반쪽을 끝에 붙인다. 이 목록 순서가 팔레트 순서다.
         // 채널(shift)과 값 범위는 상자를 만들 때 한 번만 잰다.
@@ -68,6 +71,24 @@ internal class ColorQuantizer {
             add(mid, to)
         }
         return IntArray(boxes) { average(sample, start[it], end[it]) }
+    }
+
+    /** 샘플 앞 [n]개의 색이 [maxColors]가지 이하면 처음 나온 순서대로 돌려준다. 넘으면 그 자리에서 멈추고 null. */
+    private fun distinctColors(sample: IntArray, n: Int, maxColors: Int): IntArray? {
+        val found = IntArray(minOf(n, maxColors + 1))
+        var count = 0
+        for (i in 0 until n) {
+            val c = sample[i]
+            val word = c ushr 6
+            val bit = 1L shl (c and 63)
+            if (seen[word] and bit == 0L) {
+                seen[word] = seen[word] or bit
+                found[count++] = c
+                if (count > maxColors) break
+            }
+        }
+        for (i in 0 until count) seen[found[i] ushr 6] = 0L
+        return if (count <= maxColors) found.copyOf(count) else null
     }
 
     /**
