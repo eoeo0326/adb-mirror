@@ -11,7 +11,7 @@ import kotlin.test.assertContentEquals
 /** 실제 화면 캡처를 스크롤한 프레임(화면 전체가 바뀌는 가장 무거운 경우)에서 참조 구현과 출력이 같은지 본다. */
 class GifCodecFixtureTest {
     private val fixtures = File(System.getProperty("fixtures.dir") ?: error("fixtures.dir 시스템 속성이 없습니다"))
-    private val quantizer = ColorQuantizer
+    private val quantizer = ColorQuantizer()
     private val lzw = GifLzw()
 
     /** fixture 화면을 [width] 너비로 줄이고, 프레임마다 12줄씩 스크롤하며 파란 채널에 ±1 잡음을 얹는다. */

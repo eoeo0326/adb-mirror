@@ -45,7 +45,7 @@ class GifEncoderTest {
     fun paletteKeepsExactColorsWhenFew() {
         val colors = intArrayOf(0xFFFF0000.toInt(), 0xFF00FF00.toInt(), 0xFF0000FF.toInt())
         val frame = RgbaFrame(3, 1, colors)
-        val q = ColorQuantizer.quantize(frame)
+        val q = ColorQuantizer().quantize(frame)
         assertEquals(colors.map { it and 0xFFFFFF }.toSet(), q.palette.toSet())
         assertTrue((0..2).all { q.palette[q.indices[it].toInt() and 0xFF] == colors[it] and 0xFFFFFF })
     }
@@ -53,8 +53,8 @@ class GifEncoderTest {
     @Test
     fun manyColorsAreReducedTo256() {
         val frame = RgbaFrame(64, 64, IntArray(64 * 64) { (it * 97) and 0xFFFFFF or (0xFF shl 24) })
-        assertEquals(256, ColorQuantizer.quantize(frame).palette.size)
-        assertEquals(256, ColorQuantizer.quantize(frame, dither = true).palette.size)
+        assertEquals(256, ColorQuantizer().quantize(frame).palette.size)
+        assertEquals(256, ColorQuantizer().quantize(frame, dither = true).palette.size)
     }
 
     @Test
