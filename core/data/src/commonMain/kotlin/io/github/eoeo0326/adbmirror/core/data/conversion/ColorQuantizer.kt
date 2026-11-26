@@ -19,6 +19,9 @@ internal class ColorQuantizer {
 
     private val nearest = NearestColor()
 
+    /** 디더링 오차 두 줄(지금 줄·다음 줄 × R·G·B 각 너비만큼). 넓은 프레임이 오면 키운다. */
+    private var err = FloatArray(0)
+
     fun quantize(frame: RgbaFrame, maxColors: Int = 256, dither: Boolean = false): Result {
         require(maxColors in 1..256) { "maxColors는 1..256이어야 한다: $maxColors" }
         val palette = buildPalette(frame.pixels, maxColors)
@@ -151,29 +154,43 @@ internal class ColorQuantizer {
         val w = frame.width
         val h = frame.height
         // Floyd–Steinberg: 오차를 오른쪽·아래 이웃에 7/16, 3/16, 5/16, 1/16로 나눈다.
-        val err = Array(3) { FloatArray(w * h) }
+        // 오차는 지금 줄과 다음 줄에만 쌓이므로 두 줄을 번갈아 쓴다. 한 줄은 R·G·B 순서로 w칸씩이다.
+        if (err.size < 6 * w) err = FloatArray(6 * w)
+        val err = err
+        err.fill(0f, 0, 6 * w)
+        var row = 0
+        var below = 3 * w
         val out = ByteArray(w * h)
-        for (y in 0 until h) for (x in 0 until w) {
-            val i = y * w + x
-            val c = frame.pixels[i]
-            val rgb = IntArray(3) { ch ->
-                val v = (c ushr (16 - ch * 8)) and 0xFF
-                (v + err[ch][i]).toInt().coerceIn(0, 255)
+        for (y in 0 until h) {
+            val hasBelow = y + 1 < h
+            for (x in 0 until w) {
+                val i = y * w + x
+                val c = frame.pixels[i]
+                val r = (((c ushr 16) and 0xFF) + err[row + x]).toInt().coerceIn(0, 255)
+                val g = (((c ushr 8) and 0xFF) + err[row + w + x]).toInt().coerceIn(0, 255)
+                val b = ((c and 0xFF) + err[row + 2 * w + x]).toInt().coerceIn(0, 255)
+                val idx = map.index((r shl 16) or (g shl 8) or b)
+                out[i] = idx.toByte()
+                val p = palette[idx]
+                spread(err, row, below, w, x, hasBelow, (r - ((p ushr 16) and 0xFF)).toFloat())
+                spread(err, row + w, below + w, w, x, hasBelow, (g - ((p ushr 8) and 0xFF)).toFloat())
+                spread(err, row + 2 * w, below + 2 * w, w, x, hasBelow, (b - (p and 0xFF)).toFloat())
             }
-            val idx = map.index((rgb[0] shl 16) or (rgb[1] shl 8) or rgb[2])
-            out[i] = idx.toByte()
-            val p = palette[idx]
-            for (ch in 0..2) {
-                val e = (rgb[ch] - ((p ushr (16 - ch * 8)) and 0xFF)).toFloat()
-                if (x + 1 < w) err[ch][i + 1] += e * 7 / 16
-                if (y + 1 < h) {
-                    if (x > 0) err[ch][i + w - 1] += e * 3 / 16
-                    err[ch][i + w] += e * 5 / 16
-                    if (x + 1 < w) err[ch][i + w + 1] += e * 1 / 16
-                }
-            }
+            // 다 쓴 줄을 비우고 다음 줄의 아래 줄로 쓴다.
+            err.fill(0f, row, row + 3 * w)
+            row = below.also { below = row }
         }
         return out
+    }
+
+    /** 한 채널의 오차 [e]를 오른쪽 칸(지금 줄 [row])과 아래 세 칸(다음 줄 [below])에 나눈다. */
+    private fun spread(err: FloatArray, row: Int, below: Int, w: Int, x: Int, hasBelow: Boolean, e: Float) {
+        if (x + 1 < w) err[row + x + 1] += e * 7 / 16
+        if (hasBelow) {
+            if (x > 0) err[below + x - 1] += e * 3 / 16
+            err[below + x] += e * 5 / 16
+            if (x + 1 < w) err[below + x + 1] += e * 1 / 16
+        }
     }
 
     /**
