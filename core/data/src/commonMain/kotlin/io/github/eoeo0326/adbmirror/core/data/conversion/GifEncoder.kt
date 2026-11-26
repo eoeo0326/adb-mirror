@@ -32,6 +32,9 @@ class GifEncoder(
     /** 지금까지 쓴 이미지를 겹친 결과(보는 사람에게 보이는 화면). 첫 프레임을 쓰기 전에는 null. */
     private var canvas: IntArray? = null
 
+    private val quantizer = ColorQuantizer()
+    private val lzw = GifLzw()
+
     init {
         require(width in 1..0xFFFF && height in 1..0xFFFF) { "GIF 크기 범위 초과: ${width}x$height" }
         require(loopCount in 0..0xFFFF)
@@ -64,7 +67,7 @@ class GifEncoder(
         // 보이는 화면과 허용치 안에서 같으면(앞 프레임과 잡음만 다름) 1픽셀만 다시 써 지연 시간만 이어 간다.
         val r = if (shown == null) Rect(0, 0, width, height) else changedRect(shown, frame) ?: Rect(0, 0, 1, 1)
         val region = if (r.w == width && r.h == height) frame else crop(frame, r)
-        val q = ColorQuantizer.quantize(region, dither = dither)
+        val q = quantizer.quantize(region, dither = dither)
         // 한 프레임에 65535cs(약 11분)까지. 넘으면 나머지는 같은 영역을 한 번 더 써서 이어 붙인다.
         var remaining = (delayMs + 5) / 10
         do {
@@ -90,7 +93,7 @@ class GifEncoder(
             out.u8((c ushr 16) and 0xFF); out.u8((c ushr 8) and 0xFF); out.u8(c and 0xFF)
         }
         out.u8(8) // LZW 최소 코드 크기
-        out.bytes(GifLzw.encode(q.indices, 8))
+        out.bytes(lzw.encode(q.indices, 8))
         frames++
     }
 

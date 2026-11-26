@@ -1,16 +1,26 @@
 package io.github.eoeo0326.adbmirror.core.data.conversion
 
-/** GIF용 가변 길이 LZW 압축(최대 12비트 코드). 결과는 255바이트 이하 sub-block으로 나뉜 image data. */
-internal object GifLzw {
-    private const val MAX_CODES = 4096
+/**
+ * GIF용 가변 길이 LZW 압축(최대 12비트 코드). 결과는 255바이트 이하 sub-block으로 나뉜 image data.
+ *
+ * 사전(4MB)과 출력 버퍼를 인스턴스가 들고 호출마다 다시 쓴다. 한 인스턴스를 동시에 여러 곳에서 쓰지 않는다.
+ */
+internal class GifLzw {
+    /** (prefix code shl 8) or byte → code. 0은 빈 칸이다(넣는 코드는 항상 end + 1 이상이다). */
+    private val table = IntArray(MAX_CODES shl 8)
+
+    /** [table]에 넣은 키. 사전을 비울 때 표 전체 대신 이 칸만 0으로 되돌린다. */
+    private val used = IntArray(MAX_CODES)
+    private var usedCount = 0
+    private val bits = BitPacker()
 
     fun encode(indices: ByteArray, minCodeSize: Int = 8): ByteArray {
+        clearTable()
+        bits.reset()
         val clear = 1 shl minCodeSize
         val end = clear + 1
-        val bits = BitPacker()
         var codeSize = minCodeSize + 1
         var nextCode = end + 1
-        val table = HashMap<Int, Int>() // (prefix code shl 8) or byte → code
 
         bits.write(clear, codeSize)
         if (indices.isEmpty()) {
@@ -22,17 +32,18 @@ internal object GifLzw {
             val c = indices[k].toInt() and 0xFF
             val key = (prefix shl 8) or c
             val existing = table[key]
-            if (existing != null) {
+            if (existing != 0) {
                 prefix = existing
                 continue
             }
             bits.write(prefix, codeSize)
             if (nextCode < MAX_CODES) {
                 table[key] = nextCode++
+                used[usedCount++] = key
                 if (nextCode > (1 shl codeSize) && codeSize < 12) codeSize++
             } else {
                 bits.write(clear, codeSize)
-                table.clear()
+                clearTable()
                 codeSize = minCodeSize + 1
                 nextCode = end + 1
             }
@@ -43,12 +54,23 @@ internal object GifLzw {
         return bits.subBlocks()
     }
 
+    private fun clearTable() {
+        for (i in 0 until usedCount) table[used[i]] = 0
+        usedCount = 0
+    }
+
     /** LSB 우선으로 비트를 쌓는다(GIF 규칙). */
     private class BitPacker {
         private var out = ByteArray(1024)
         private var size = 0
         private var acc = 0L
         private var accBits = 0
+
+        fun reset() {
+            size = 0
+            acc = 0
+            accBits = 0
+        }
 
         fun write(code: Int, width: Int) {
             acc = acc or (code.toLong() shl accBits)
@@ -81,5 +103,9 @@ internal object GifLzw {
             result[p] = 0 // block terminator
             return result
         }
+    }
+
+    private companion object {
+        const val MAX_CODES = 4096
     }
 }
