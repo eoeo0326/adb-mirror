@@ -17,10 +17,12 @@ internal class ColorQuantizer {
     /** 24비트 색마다 1비트. 샘플에서 처음 나온 색을 가린다. 쓰고 나면 켠 비트를 모두 끈다. */
     private val seen = LongArray((1 shl 24) / 64)
 
+    private val nearest = NearestColor()
+
     fun quantize(frame: RgbaFrame, maxColors: Int = 256, dither: Boolean = false): Result {
-        require(maxColors >= 1) { "maxColors는 1 이상이어야 한다: $maxColors" }
+        require(maxColors in 1..256) { "maxColors는 1..256이어야 한다: $maxColors" }
         val palette = buildPalette(frame.pixels, maxColors)
-        val map = NearestColor(palette)
+        val map = nearest.reset(palette)
         val indices = if (dither) ditherIndices(frame, palette, map) else ByteArray(frame.pixels.size) { map.index(frame.pixels[it]).toByte() }
         return Result(palette, indices)
     }
@@ -174,14 +176,50 @@ internal class ColorQuantizer {
         return out
     }
 
-    /** 가장 가까운 팔레트 색(RGB 제곱 거리). 같은 색은 캐시한다. */
-    private class NearestColor(private val palette: IntArray) {
-        private val cache = HashMap<Int, Int>()
+    /**
+     * 가장 가까운 팔레트 색(RGB 제곱 거리). 거리가 같으면 앞 인덱스를 고른다.
+     * 한 번 찾은 색은 열린 주소 표에 캐시한다. 표가 반쯤 차면 더 넣지 않고 그때그때 찾는다(결과는 같다).
+     */
+    private class NearestColor {
+        private var palette = IntArray(0)
 
-        fun index(color: Int): Int = cache.getOrPut(color and 0xFFFFFF) {
-            val r = (color ushr 16) and 0xFF
-            val g = (color ushr 8) and 0xFF
-            val b = color and 0xFF
+        /** 24비트 색. -1은 빈 칸이다(색은 음수가 아니다). */
+        private val keys = IntArray(CAPACITY).also { it.fill(-1) }
+        private val values = ByteArray(CAPACITY)
+
+        /** [keys]에 넣은 칸. 팔레트가 바뀌면 이 칸만 비운다. */
+        private val filled = IntArray(CAPACITY / 2)
+        private var filledCount = 0
+
+        fun reset(palette: IntArray): NearestColor {
+            this.palette = palette
+            for (i in 0 until filledCount) keys[filled[i]] = -1
+            filledCount = 0
+            return this
+        }
+
+        fun index(color: Int): Int {
+            val rgb = color and 0xFFFFFF
+            var slot = (rgb * HASH) ushr (32 - BITS)
+            while (true) {
+                val key = keys[slot]
+                if (key == rgb) return values[slot].toInt() and 0xFF
+                if (key == -1) break
+                slot = (slot + 1) and (CAPACITY - 1)
+            }
+            val best = search(rgb)
+            if (filledCount < filled.size) {
+                keys[slot] = rgb
+                values[slot] = best.toByte()
+                filled[filledCount++] = slot
+            }
+            return best
+        }
+
+        private fun search(rgb: Int): Int {
+            val r = (rgb ushr 16) and 0xFF
+            val g = (rgb ushr 8) and 0xFF
+            val b = rgb and 0xFF
             var best = 0
             var bestDist = Int.MAX_VALUE
             for (i in palette.indices) {
@@ -192,7 +230,13 @@ internal class ColorQuantizer {
                 val d = dr * dr + dg * dg + db * db
                 if (d < bestDist) { bestDist = d; best = i; if (d == 0) break }
             }
-            best
+            return best
+        }
+
+        private companion object {
+            const val BITS = 18
+            const val CAPACITY = 1 shl BITS
+            const val HASH = 0x9E3779B1.toInt()
         }
     }
 
